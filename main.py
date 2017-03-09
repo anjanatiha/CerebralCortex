@@ -27,10 +27,7 @@ import gzip
 import os
 import time
 import uuid
-from datetime import datetime
 from pprint import pprint
-
-import pytz
 
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.data_processor.cStress import cStress
@@ -65,18 +62,6 @@ def readfile(filename):
                 break
     return data
 
-def readStressFile(filename):
-    data = []
-    with gzip.open(filename, 'rt') as f:
-        for l in f:
-            parts = [x.strip() for x in l.split(',')]
-            val = parts[0][:2]
-            time_stamp_begin = datetime.fromtimestamp(float(parts[2]) / 1000.0, pytz.timezone('US/Central'))
-            time_stamp_end = datetime.fromtimestamp(float(parts[3]) / 1000.0, pytz.timezone('US/Central'))
-            dp = DataPoint.from_tuple(start_time=time_stamp_begin, end_time=time_stamp_end, sample=val)
-            if isinstance(dp, DataPoint):
-                data.append(dp)
-    return data
 
 def loader(identifier: int):
     participant = "SI%02d" % identifier
@@ -99,9 +84,6 @@ def loader(identifier: int):
         accelz = DataStream(None, participant_uuid)
         accelz.data = readfile(find(basedir, {"participant": participant, "datasource": "accelz"}))
 
-        stressmarks = DataStream(None, participant_uuid)
-        stressmarks.data = readStressFile(find(basedir, {"participant": participant, "datasource": "stress_marks"}))
-
         return {"participant": participant, "ecg": ecg, "rip": rip, "accelx": accelx, "accely": accely,
                 "accelz": accelz}
     except Exception as e:
@@ -121,8 +103,8 @@ cstress_feature_vector = cStress(data)
 
 pprint(cstress_feature_vector.collect())
 
+
 # results = ids.map(loader)
 # pprint(results.collect())
-
 end_time = time.time()
 print(end_time - start_time)
