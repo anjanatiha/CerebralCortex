@@ -29,7 +29,9 @@ from sklearn.grid_search import BaseSearchCV, _check_param_grid, ParameterGrid, 
 from sklearn.metrics.scorer import check_scoring
 from sklearn.utils.validation import _num_samples, indexable
 from spark_sklearn.util import createLocalSparkSession
-
+from pyspark import SparkContext, SparkConf
+# conf = SparkConf().setAppName("aaa").setMaster("aaa")
+sc = SparkContext()
 ######################################################
 # Command line parameter configuration
 
@@ -785,14 +787,14 @@ def cstress_model():
 
     spark = createLocalSparkSession()
 
-    delta = 0.1
+    delta = 0.5
     parameters = {'kernel': ['rbf'],
-              'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
-              'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
+              'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+              'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svr = svm.SVC()
-    clf = RandomGridSearchCV(spark.sparkContext, svr, parameters, scoring=None, n_jobs=-1, refit=True, verbose=1)
+    clf = RandomGridSearchCV(sc, svr, parameters, scoring=None, n_jobs=-1, refit=True, verbose=1)
     clf.fit(X_train, y_train)
     spark.stop(); SparkSession._instantiatedContext = None
 
