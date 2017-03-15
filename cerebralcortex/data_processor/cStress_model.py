@@ -31,9 +31,13 @@ from collections import Counter
 from collections import Sized
 from pathlib import Path
 from pprint import pprint
+
+from pyspark.ml.linalg import Vectors
+from pyspark.mllib.regression import LabeledPoint
+from pyspark.shell import sc
 from sklearn import svm, metrics, preprocessing
 from sklearn.base import clone, is_classifier
-from sklearn.cross_validation import LabelKFold
+from sklearn.cross_validation import LabelKFold, train_test_split, cross_val_score, KFold
 from sklearn.model_selection import check_cv
 from sklearn.externals.joblib import Parallel, delayed
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, ParameterSampler, ParameterGrid
@@ -49,15 +53,30 @@ from pprint import pprint
 from datetime import datetime
 import pytz
 
+#####extra
+from pyspark.sql import SparkSession
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.ml.feature import HashingTF, Tokenizer
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+######
+from sklearn import linear_model
+from sklearn import datasets
+from sklearn import svm, grid_search, datasets
+from spark_sklearn import GridSearchCV
+
+########
 
 from pyspark import RDD
+from spark_sklearn.util import createLocalSparkSession
+
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.data_processor.cStress import cStress
 from cerebralcortex.data_processor.preprocessor import parser
 from cerebralcortex.kernel.datatypes.datapoint import DataPoint
 from cerebralcortex.kernel.datatypes.datastream import DataStream
 from cerebralcortex.legacy import find
-
 
 
 argparser = argparse.ArgumentParser(description="Cerebral Cortex cStress Test Application")
@@ -546,7 +565,7 @@ def feature_target_loader(identifier: int):
 def cStress_model_main():
 
     start_time = time.time()
-    ids = CC.sparkSession.sparkContext.parallelize([i for i in range(1, 5)])
+    ids = CC.sparkSession.sparkContext.parallelize([i for i in range(1, 2)])
 
     data = ids.map(lambda i: feature_target_loader(i)).filter(lambda x: 'participant' in x)
 
@@ -619,11 +638,17 @@ def cStress_model(feature_rdd: RDD, target: RDD) -> RDD:
     groundtruth_rdd = target.map(lambda ds: (ds['participant'], ds['stress_markers']))
     groundtruth = groundtruth_rdd.collect()
 
-    # features_list = read_features(features)
-    # read_features_list(features_list)
+    features_list = read_features(features)
+    #read_features_list(features_list)
 
-    features_dict = read_features_dict(features)
+    #features_dict = read_features_dict(features)
     # print(features_dict)
+    for i in range(100):
+        print(features[0][1][0][0].data[i].start_time, " ")
+    print("\n")
+    for i in range(10):
+        print(features[0][1][2][2].data[i].start_time, " ")
+
 
 
 
@@ -685,8 +710,47 @@ def cStress_model(feature_rdd: RDD, target: RDD) -> RDD:
     #     print("Subjects: " + str(np.unique(subjects)))
     # else:
     #     print("Results not good")
-    return features_dict
+    return 0
 
 
 
-cStress_model_main()
+#  cStress_model_main()
+
+
+spark = SparkSession \
+    .builder \
+    .appName("Python Spark SQL basic example") \
+    .config("spark.some.config.option", "some-value") \
+    .getOrCreate()
+sc = spark.sparkContext
+
+def parsePoint(X_train, y_train):
+    values = []
+    for i in range(len(X_train)):
+        a=[y_train[i], X_train[i]]
+        values.append(a)
+    return LabeledPoint(values[0], values[1:])
+def c():
+    iris = datasets.load_iris()
+    X_train, X_test, y_train, y_test = train_test_split(iris.data, iris.target, test_size=0.3, random_state=0)
+    delta = 0.5
+    parameters = {'kernel': ['rbf'],
+              'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+              'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
+              'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+
+    spark = createLocalSparkSession()
+    # iris = datasets.load_iris()
+    #parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
+    svr = svm.SVC()
+    clf = GridSearchCV(spark.sparkContext, svr, parameters, scoring=None, n_jobs=-1, refit=True, verbose=1)
+    clf.fit(X_train, y_train)
+    spark.stop(); SparkSession._instantiatedContext = None
+
+    clf.predict(X_test)
+    print(clf.best_score_)
+
+
+c()
+
+
