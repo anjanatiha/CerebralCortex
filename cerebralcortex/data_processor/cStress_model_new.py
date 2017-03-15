@@ -787,10 +787,10 @@ def cstress_model():
 
     spark = createLocalSparkSession()
 
-    delta = 0.5
+    delta = 0.1
     parameters = {'kernel': ['rbf'],
-              'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
-              'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
+              'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
+              'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svr = svm.SVC()
