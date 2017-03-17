@@ -357,8 +357,8 @@ class RandomGridSearchCV(BaseSearchCV):
                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
                  pre_dispatch='2*n_jobs', error_score='raise'):
         super(RandomGridSearchCV, self).__init__(
-            estimator, scoring, fit_params, n_jobs, iid,
-            refit, cv, verbose, pre_dispatch, error_score)
+            estimator=estimator, scoring=scoring, fit_params=fit_params, n_jobs=n_jobs, iid=iid,
+            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch, error_score=error_score)
         self.sc = sc
         self.param_grid = param_grid
         self.grid_scores_ = None
@@ -785,27 +785,23 @@ def cstress_model():
     #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
     #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
-    spark = createLocalSparkSession()
-
-    delta = 0.1
+    delta = 0.5
     parameters = {'kernel': ['rbf'],
-              'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
-              'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
+              'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+              'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
+    scorer = f1Bias_scorer_CV
     svr = svm.SVC()
     clf = RandomGridSearchCV(sc, svr, parameters, scoring=None, n_jobs=-1, refit=True, verbose=1)
     clf.fit(X_train, y_train)
-    spark.stop(); SparkSession._instantiatedContext = None
+    sc.stop(); SparkSession._instantiatedContext = None
 
     y_pred = clf.predict(X_test)
     f1 = f1_score(y_test, y_pred, average='weighted')
     print(f1)
     print(clf.best_score_)
     print(clf.best_params_)
-    print(clf.best_score_)
-    print(clf.best_params_)
-
 
     # if args.scorer == 'f1':
     #     scorer = f1Bias_scorer_CV
