@@ -802,9 +802,6 @@ def cstress_model():
     print(f1)
     print(clf.best_score_)
     print(clf.best_params_)
-    print(clf.best_score_)
-    print(clf.best_params_)
-
 
     # if args.scorer == 'f1':
     #     scorer = f1Bias_scorer_CV
