@@ -7,7 +7,7 @@ from pathlib import Path
 from pprint import pprint
 from sklearn import svm, metrics, preprocessing
 from sklearn.base import clone, is_classifier
-from sklearn.cross_validation import LabelKFold
+from sklearn.cross_validation import LabelKFold, StratifiedKFold
 from sklearn.cross_validation import check_cv
 from sklearn.externals.joblib import Parallel, delayed
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV, ParameterSampler, ParameterGrid
@@ -82,406 +82,6 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     score = scorer(cv_probs_, y)
 
     return [score, parameters]  # scoring_time]
-
-
-# class ModifiedGridSearchCV(GridSearchCV):
-#     def __init__(self, estimator, param_grid, scoring=None, fit_params=None,
-#                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-#                  pre_dispatch='2*n_jobs', error_score='raise'):
-#
-#         super(ModifiedGridSearchCV, self).__init__(
-#             estimator, param_grid, scoring, fit_params, n_jobs, iid,
-#             refit, cv, verbose, pre_dispatch, error_score)
-#
-#     def fit(self, X, y):
-#         """Actual fitting,  performing the search over parameters."""
-#
-#         parameter_iterable = ParameterGrid(self.param_grid)
-#
-#         estimator = self.estimator
-#         cv = self.cv
-#
-#         n_samples = _num_samples(X)
-#         X, y = indexable(X, y)
-#
-#         if y is not None:
-#             if len(y) != n_samples:
-#                 raise ValueError('Target variable (y) has a different number '
-#                                  'of samples (%i) than data (X: %i samples)'
-#                                  % (len(y), n_samples))
-#         cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
-#
-#         if self.verbose > 0:
-#             if isinstance(parameter_iterable, Sized):
-#                 n_candidates = len(parameter_iterable)
-#                 print("Fitting {0} folds for each of {1} candidates, totalling"
-#                       " {2} fits".format(len(cv), n_candidates,
-#                                          n_candidates * len(cv)))
-#
-#         base_estimator = clone(self.estimator)
-#
-#         pre_dispatch = self.pre_dispatch
-#
-#         out = Parallel(
-#             n_jobs=self.n_jobs, verbose=self.verbose,
-#             pre_dispatch=pre_dispatch
-#         )(
-#             delayed(cv_fit_and_score)(clone(base_estimator), X, y, self.scoring,
-#                                       parameters, cv=cv)
-#             for parameters in parameter_iterable)
-#
-#         best = sorted(out, reverse=True)[0]
-#         self.best_params_ = best[1]
-#         self.best_score_ = best[0]
-#
-#         if self.refit:
-#             # fit the best estimator using the entire dataset
-#             # clone first to work around broken estimators
-#             best_estimator = clone(base_estimator).set_params(
-#                 **best[1])
-#             if y is not None:
-#                 best_estimator.fit(X, y, **self.fit_params)
-#             else:
-#                 best_estimator.fit(X, **self.fit_params)
-#             self.best_estimator_ = best_estimator
-#
-#         return self
-#
-#
-# class ModifiedRandomizedSearchCV(RandomizedSearchCV):
-#     def __init__(self, estimator, param_distributions, n_iter=10, scoring=None,
-#                  fit_params=None, n_jobs=1, iid=True, refit=True, cv=None,
-#                  verbose=0, pre_dispatch='2*n_jobs', random_state=None,
-#                  error_score='raise'):
-#
-#         super(ModifiedRandomizedSearchCV, self).__init__(estimator=estimator, param_distributions=param_distributions,
-#                                                          n_iter=n_iter, scoring=scoring, random_state=random_state,
-#                                                          fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit,
-#                                                          cv=cv, verbose=verbose, pre_dispatch=pre_dispatch,
-#                                                          error_score=error_score)
-#
-#     def fit(self, X, y):
-#         """Actual fitting,  performing the search over parameters."""
-#
-#         parameter_iterable = ParameterSampler(self.param_distributions,
-#                                               self.n_iter,
-#                                               random_state=self.random_state)
-#         estimator = self.estimator
-#         cv = self.cv
-#
-#         n_samples = _num_samples(X)
-#         X, y = indexable(X, y)
-#
-#         if y is not None:
-#             if len(y) != n_samples:
-#                 raise ValueError('Target variable (y) has a different number '
-#                                  'of samples (%i) than data (X: %i samples)'
-#                                  % (len(y), n_samples))
-#         cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
-#
-#         if self.verbose > 0:
-#             if isinstance(parameter_iterable, Sized):
-#                 n_candidates = len(parameter_iterable)
-#                 print("Fitting {0} folds for each of {1} candidates, totalling"
-#                       " {2} fits".format(len(cv), n_candidates,
-#                                          n_candidates * len(cv)))
-#
-#         base_estimator = clone(self.estimator)
-#
-#         pre_dispatch = self.pre_dispatch
-#
-#         out = Parallel(
-#             n_jobs=self.n_jobs, verbose=self.verbose,
-#             pre_dispatch=pre_dispatch
-#         )(
-#             delayed(cv_fit_and_score)(clone(base_estimator), X, y, self.scoring,
-#                                       parameters, cv=cv)
-#             for parameters in parameter_iterable)
-#
-#         #best = sorted(out, reverse=True)[0]
-#         best = sorted(out, key=lambda x: x[0], reverse=True)[0]
-#
-#         self.best_params_ = best[1]
-#         self.best_score_ = best[0]
-#
-#         if self.refit:
-#             # fit the best estimator using the entire dataset
-#             # clone first to work around broken estimators
-#             best_estimator = clone(base_estimator).set_params(
-#                 **best[1])
-#             if y is not None:
-#                 best_estimator.fit(X, y, **self.fit_params)
-#             else:
-#                 best_estimator.fit(X, **self.fit_params)
-#             self.best_estimator_ = best_estimator
-#
-#         return self
-
-class GridSearchCV(BaseSearchCV):
-
-    def __init__(self, sc, estimator, param_grid, scoring=None, fit_params=None,
-                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', error_score='raise'):
-        super(GridSearchCV, self).__init__(
-            estimator, scoring, fit_params, n_jobs, iid,   #add param_grid
-            refit, cv, verbose, pre_dispatch, error_score)
-        self.sc = sc
-        self.param_grid = param_grid
-        self.grid_scores_ = None
-        _check_param_grid(param_grid)
-
-    def fit(self, X, y=None):
-        """Run fit with all sets of parameters.
-        Parameters
-        ----------
-        X : array-like, shape = [n_samples, n_features]
-            Training vector, where n_samples is the number of samples and
-            n_features is the number of features.
-        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
-            Target relative to X for classification or regression;
-            None for unsupervised learning.
-        """
-        return self._fit(X, y, ParameterGrid(self.param_grid))
-
-    def _fit(self, X, y, parameter_iterable):
-        """Actual fitting,  performing the search over parameters."""
-
-        estimator = self.estimator
-        cv = self.cv
-        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
-
-        n_samples = _num_samples(X)
-        X, y = indexable(X, y)
-
-        if y is not None:
-            if len(y) != n_samples:
-                raise ValueError('Target variable (y) has a different number '
-                                 'of samples (%i) than data (X: %i samples)'
-                                 % (len(y), n_samples))
-        cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
-
-        if self.verbose > 0:
-            if isinstance(parameter_iterable, Sized):
-                n_candidates = len(parameter_iterable)
-                print("Fitting {0} folds for each of {1} candidates, totalling"
-                      " {2} fits".format(len(cv), n_candidates,
-                                         n_candidates * len(cv)))
-
-        base_estimator = clone(self.estimator)
-
-        param_grid = [(parameters, train, test)
-                      for parameters in parameter_iterable
-                      for (train, test) in cv]
-
-
-        # Because the original python code expects a certain order for the elements, we need to
-        # respect it.
-        indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
-        par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
-        X_bc = self.sc.broadcast(X)
-        y_bc = self.sc.broadcast(y)
-
-        scorer = self.scorer_
-        verbose = self.verbose
-        fit_params = self.fit_params
-        error_score = self.error_score
-        fas = _fit_and_score
-
-        def fun(tup):
-            (index, (parameters, train, test)) = tup
-            local_estimator = clone(base_estimator)
-            local_X = X_bc.value
-            local_y = y_bc.value
-            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
-                      parameters, fit_params,
-                      return_parameters=True, error_score=error_score)
-            return (index, res)
-        indexed_out0 = dict(par_param_grid.map(fun).collect())
-        out = [indexed_out0[idx] for idx in range(len(param_grid))]
-
-        X_bc.unpersist()
-        y_bc.unpersist()
-
-        # Out is a list of triplet: score, estimator, n_test_samples
-        n_fits = len(out)
-        n_folds = len(cv)
-
-        scores = list()
-        grid_scores = list()
-        for grid_start in range(0, n_fits, n_folds):
-            n_test_samples = 0
-            score = 0
-            all_scores = []
-            for this_score, this_n_test_samples, _, parameters in \
-                    out[grid_start:grid_start + n_folds]:
-                all_scores.append(this_score)
-                if self.iid:
-                    this_score *= this_n_test_samples
-                    n_test_samples += this_n_test_samples
-                score += this_score
-            if self.iid:
-                score /= float(n_test_samples)
-            else:
-                score /= float(n_folds)
-            scores.append((score, parameters))
-            # TODO: shall we also store the test_fold_sizes?
-            grid_scores.append(_CVScoreTuple(
-                parameters,
-                score,
-                np.array(all_scores)))
-        # Store the computed scores
-        self.grid_scores_ = grid_scores
-
-        # Find the best parameters by comparing on the mean validation score:
-        # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
-                      reverse=True)[0]
-        self.best_params_ = best.parameters
-        self.best_score_ = best.mean_validation_score
-
-        if self.refit:
-            # fit the best estimator using the entire dataset
-            # clone first to work around broken estimators
-            best_estimator = clone(base_estimator).set_params(
-                **best.parameters)
-            if y is not None:
-                best_estimator.fit(X, y, **self.fit_params)
-            else:
-                best_estimator.fit(X, **self.fit_params)
-            self.best_estimator_ = best_estimator
-        return self
-
-class RandomGridSearchCV(BaseSearchCV):
-
-    def __init__(self, sc, estimator, param_grid, n_iter=10, scoring=None, fit_params=None,
-                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', error_score='raise'):
-        super(RandomGridSearchCV, self).__init__(
-            estimator=estimator, scoring=scoring, fit_params=fit_params, n_jobs=n_jobs, iid=iid,
-            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch, error_score=error_score)
-        self.sc = sc
-        self.param_grid = param_grid
-        self.grid_scores_ = None
-        _check_param_grid(param_grid)
-
-    def fit(self, X, y=None):
-        """Run fit with all sets of parameters.
-        Parameters
-        ----------
-        X : array-like, shape = [n_samples, n_features]
-            Training vector, where n_samples is the number of samples and
-            n_features is the number of features.
-        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
-            Target relative to X for classification or regression;
-            None for unsupervised learning.
-        """
-        return self._fit(X, y, ParameterGrid(self.param_grid))
-
-    def _fit(self, X, y, parameter_iterable):
-        """Actual fitting,  performing the search over parameters."""
-
-        estimator = self.estimator
-        cv = self.cv
-        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
-
-        n_samples = _num_samples(X)
-        X, y = indexable(X, y)
-
-        if y is not None:
-            if len(y) != n_samples:
-                raise ValueError('Target variable (y) has a different number '
-                                 'of samples (%i) than data (X: %i samples)'
-                                 % (len(y), n_samples))
-        cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
-
-        if self.verbose > 0:
-            if isinstance(parameter_iterable, Sized):
-                n_candidates = len(parameter_iterable)
-                print("Fitting {0} folds for each of {1} candidates, totalling"
-                      " {2} fits".format(len(cv), n_candidates,
-                                         n_candidates * len(cv)))
-
-        base_estimator = clone(self.estimator)
-
-        param_grid = [(parameters, train, test)
-                      for parameters in parameter_iterable
-                      for (train, test) in cv]
-        # Because the original python code expects a certain order for the elements, we need to
-        # respect it.
-        indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
-        par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
-        X_bc = self.sc.broadcast(X)
-        y_bc = self.sc.broadcast(y)
-
-        scorer = self.scorer_
-        verbose = self.verbose
-        fit_params = self.fit_params
-        error_score = self.error_score
-        fas = _fit_and_score
-
-        def fun(tup):
-            (index, (parameters, train, test)) = tup
-            local_estimator = clone(base_estimator)
-            local_X = X_bc.value
-            local_y = y_bc.value
-            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
-                      parameters, fit_params,
-                      return_parameters=True, error_score=error_score)
-            return (index, res)
-        indexed_out0 = dict(par_param_grid.map(fun).collect())
-        out = [indexed_out0[idx] for idx in range(len(param_grid))]
-
-        X_bc.unpersist()
-        y_bc.unpersist()
-
-        # Out is a list of triplet: score, estimator, n_test_samples
-        n_fits = len(out)
-        n_folds = len(cv)
-
-        scores = list()
-        grid_scores = list()
-        for grid_start in range(0, n_fits, n_folds):
-            n_test_samples = 0
-            score = 0
-            all_scores = []
-            for this_score, this_n_test_samples, _, parameters in \
-                    out[grid_start:grid_start + n_folds]:
-                all_scores.append(this_score)
-                if self.iid:
-                    this_score *= this_n_test_samples
-                    n_test_samples += this_n_test_samples
-                score += this_score
-            if self.iid:
-                score /= float(n_test_samples)
-            else:
-                score /= float(n_folds)
-            scores.append((score, parameters))
-            # TODO: shall we also store the test_fold_sizes?
-            grid_scores.append(_CVScoreTuple(
-                parameters,
-                score,
-                np.array(all_scores)))
-        # Store the computed scores
-        self.grid_scores_ = grid_scores
-
-        # Find the best parameters by comparing on the mean validation score:
-        # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
-                      reverse=True)[0]
-        self.best_params_ = best.parameters
-        self.best_score_ = best.mean_validation_score
-
-        if self.refit:
-            # fit the best estimator using the entire dataset
-            # clone first to work around broken estimators
-            best_estimator = clone(base_estimator).set_params(
-                **best.parameters)
-            if y is not None:
-                best_estimator.fit(X, y, **self.fit_params)
-            else:
-                best_estimator.fit(X, **self.fit_params)
-            self.best_estimator_ = best_estimator
-        return self
 
 
 
@@ -760,9 +360,272 @@ def cross_val_probs(estimator, X, y, cv):
     return probs
 
 
-# This tool accepts the data produced by the Java cStress implementation and trains and evaluates an SVM model with
-# cross-subject validation
-# if __name__ == '__main__':
+class GridSearchCV(BaseSearchCV):
+
+    def __init__(self, sc, estimator, param_grid, scoring=None, fit_params=None,
+                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                 pre_dispatch='2*n_jobs', error_score='raise'):
+        super(GridSearchCV, self).__init__(
+            estimator, scoring, fit_params, n_jobs, iid,   #add param_grid
+            refit, cv, verbose, pre_dispatch, error_score)
+        self.sc = sc
+        self.param_grid = param_grid
+        self.grid_scores_ = None
+        _check_param_grid(param_grid)
+
+    def fit(self, X, y=None):
+        """Run fit with all sets of parameters.
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Training vector, where n_samples is the number of samples and
+            n_features is the number of features.
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
+            None for unsupervised learning.
+        """
+        return self._fit(X, y, ParameterGrid(self.param_grid))
+
+    def _fit(self, X, y, parameter_iterable):
+        """Actual fitting,  performing the search over parameters."""
+
+        estimator = self.estimator
+        cv = self.cv
+        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
+
+        n_samples = _num_samples(X)
+        X, y = indexable(X, y)
+
+        if y is not None:
+            if len(y) != n_samples:
+                raise ValueError('Target variable (y) has a different number '
+                                 'of samples (%i) than data (X: %i samples)'
+                                 % (len(y), n_samples))
+        cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
+
+        if self.verbose > 0:
+            if isinstance(parameter_iterable, Sized):
+                n_candidates = len(parameter_iterable)
+                print("Fitting {0} folds for each of {1} candidates, totalling"
+                      " {2} fits".format(len(cv), n_candidates,
+                                         n_candidates * len(cv)))
+
+        base_estimator = clone(self.estimator)
+
+        param_grid = [(parameters, train, test)
+                      for parameters in parameter_iterable
+                      for (train, test) in cv]
+
+
+        # Because the original python code expects a certain order for the elements, we need to
+        # respect it.
+        indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
+        par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
+        X_bc = self.sc.broadcast(X)
+        y_bc = self.sc.broadcast(y)
+
+        scorer = self.scorer_
+        verbose = self.verbose
+        fit_params = self.fit_params
+        error_score = self.error_score
+        fas = _fit_and_score
+
+        def fun(tup):
+            (index, (parameters, train, test)) = tup
+            local_estimator = clone(base_estimator)
+            local_X = X_bc.value
+            local_y = y_bc.value
+            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
+                      parameters, fit_params,
+                      return_parameters=True, error_score=error_score)
+            return (index, res)
+        indexed_out0 = dict(par_param_grid.map(fun).collect())
+        out = [indexed_out0[idx] for idx in range(len(param_grid))]
+
+        X_bc.unpersist()
+        y_bc.unpersist()
+
+        # Out is a list of triplet: score, estimator, n_test_samples
+        n_fits = len(out)
+        n_folds = len(cv)
+
+        scores = list()
+        grid_scores = list()
+        for grid_start in range(0, n_fits, n_folds):
+            n_test_samples = 0
+            score = 0
+            all_scores = []
+            for this_score, this_n_test_samples, _, parameters in \
+                    out[grid_start:grid_start + n_folds]:
+                all_scores.append(this_score)
+                if self.iid:
+                    this_score *= this_n_test_samples
+                    n_test_samples += this_n_test_samples
+                score += this_score
+            if self.iid:
+                score /= float(n_test_samples)
+            else:
+                score /= float(n_folds)
+            scores.append((score, parameters))
+            # TODO: shall we also store the test_fold_sizes?
+            grid_scores.append(_CVScoreTuple(
+                parameters,
+                score,
+                np.array(all_scores)))
+        # Store the computed scores
+        self.grid_scores_ = grid_scores
+
+        # Find the best parameters by comparing on the mean validation score:
+        # note that `sorted` is deterministic in the way it breaks ties
+        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
+                      reverse=True)[0]
+        self.best_params_ = best.parameters
+        self.best_score_ = best.mean_validation_score
+
+        if self.refit:
+            # fit the best estimator using the entire dataset
+            # clone first to work around broken estimators
+            best_estimator = clone(base_estimator).set_params(
+                **best.parameters)
+            if y is not None:
+                best_estimator.fit(X, y, **self.fit_params)
+            else:
+                best_estimator.fit(X, **self.fit_params)
+            self.best_estimator_ = best_estimator
+        return self
+
+class RandomGridSearchCV(BaseSearchCV):
+
+    def __init__(self, sc, estimator, param_grid, n_iter=10, scoring=None, fit_params=None,
+                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                 pre_dispatch='2*n_jobs', error_score='raise'):
+        super(RandomGridSearchCV, self).__init__(
+            estimator=estimator, scoring=scoring, fit_params=fit_params, n_jobs=n_jobs, iid=iid,
+            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch, error_score=error_score)
+        self.sc = sc
+        self.param_grid = param_grid
+        self.grid_scores_ = None
+        _check_param_grid(param_grid)
+
+    def fit(self, X, y=None):
+        """Run fit with all sets of parameters.
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Training vector, where n_samples is the number of samples and
+            n_features is the number of features.
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
+            None for unsupervised learning.
+        """
+        return self._fit(X, y, ParameterGrid(self.param_grid))
+
+    def _fit(self, X, y, parameter_iterable):
+        """Actual fitting,  performing the search over parameters."""
+
+        estimator = self.estimator
+        cv = self.cv
+        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
+
+        n_samples = _num_samples(X)
+        X, y = indexable(X, y)
+
+        if y is not None:
+            if len(y) != n_samples:
+                raise ValueError('Target variable (y) has a different number '
+                                 'of samples (%i) than data (X: %i samples)'
+                                 % (len(y), n_samples))
+        cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
+
+        if self.verbose > 0:
+            if isinstance(parameter_iterable, Sized):
+                n_candidates = len(parameter_iterable)
+                print("Fitting {0} folds for each of {1} candidates, totalling"
+                      " {2} fits".format(len(cv), n_candidates,
+                                         n_candidates * len(cv)))
+
+        base_estimator = clone(self.estimator)
+
+        param_grid = [(parameters, train, test)
+                      for parameters in parameter_iterable
+                      for (train, test) in cv]
+        # Because the original python code expects a certain order for the elements, we need to
+        # respect it.
+        indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
+        par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
+        X_bc = self.sc.broadcast(X)
+        y_bc = self.sc.broadcast(y)
+
+        scorer = self.scorer_
+        verbose = self.verbose
+        fit_params = self.fit_params
+        error_score = self.error_score
+        fas = _fit_and_score
+
+        def fun(tup):
+            (index, (parameters, train, test)) = tup
+            local_estimator = clone(base_estimator)
+            local_X = X_bc.value
+            local_y = y_bc.value
+            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
+                      parameters, fit_params,
+                      return_parameters=True, error_score=error_score)
+            return (index, res)
+        indexed_out0 = dict(par_param_grid.map(fun).collect())
+        out = [indexed_out0[idx] for idx in range(len(param_grid))]
+
+        X_bc.unpersist()
+        y_bc.unpersist()
+
+        # Out is a list of triplet: score, estimator, n_test_samples
+        n_fits = len(out)
+        n_folds = len(cv)
+
+        scores = list()
+        grid_scores = list()
+        for grid_start in range(0, n_fits, n_folds):
+            n_test_samples = 0
+            score = 0
+            all_scores = []
+            for this_score, this_n_test_samples, _, parameters in \
+                    out[grid_start:grid_start + n_folds]:
+                all_scores.append(this_score)
+                if self.iid:
+                    this_score *= this_n_test_samples
+                    n_test_samples += this_n_test_samples
+                score += this_score
+            if self.iid:
+                score /= float(n_test_samples)
+            else:
+                score /= float(n_folds)
+            scores.append((score, parameters))
+            # TODO: shall we also store the test_fold_sizes?
+            grid_scores.append(_CVScoreTuple(
+                parameters,
+                score,
+                np.array(all_scores)))
+        # Store the computed scores
+        self.grid_scores_ = grid_scores
+
+        # Find the best parameters by comparing on the mean validation score:
+        # note that `sorted` is deterministic in the way it breaks ties
+        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
+                      reverse=True)[0]
+        self.best_params_ = best.parameters
+        self.best_score_ = best.mean_validation_score
+
+        if self.refit:
+            # fit the best estimator using the entire dataset
+            # clone first to work around broken estimators
+            best_estimator = clone(base_estimator).set_params(
+                **best.parameters)
+            if y is not None:
+                best_estimator.fit(X, y, **self.fit_params)
+            else:
+                best_estimator.fit(X, **self.fit_params)
+            self.best_estimator_ = best_estimator
+        return self
+
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
@@ -778,69 +641,56 @@ def cstress_model():
 
     X_train, X_test, y_train, y_test = train_test_split(traindata, trainlabels, test_size=0.3, random_state=0)
 
-    #lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
-    # delta = 0.1
-    # parameters = {'kernel': ['rbf'],
-    #               'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
-    #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
-    #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
-
+    lkf = StratifiedKFold(trainlabels, n_folds=3)
     delta = 0.5
     parameters = {'kernel': ['rbf'],
-              'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
-              'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
-              'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+                  'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
-    scorer = f1Bias_scorer_CV
-    svr = svm.SVC()
-    clf = RandomGridSearchCV(sc, svr, parameters, scoring=None, n_jobs=-1, refit=True, verbose=1)
-    clf.fit(X_train, y_train)
+    scorer = Twobias_scorer_CV
+    svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
+
+    if args.scorer == 'f1':
+        scorer = f1Bias_scorer_CV
+    else:
+        scorer = Twobias_scorer_CV
+
+    if args.whichsearch == 'grid':
+        clf = GridSearchCV(svc, parameters, cv=None, n_jobs=-1, scoring=None, verbose=1, iid=False)
+    else:
+        clf = RandomGridSearchCV(sc, estimator=svc, param_grid=parameters, cv=None, n_jobs=-1,
+                                 scoring=None, n_iter=args.n_iter,
+                                 verbose=1, iid=False)
+
+    clf.fit(traindata, trainlabels)
     sc.stop(); SparkSession._instantiatedContext = None
-
-    y_pred = clf.predict(X_test)
-    f1 = f1_score(y_test, y_pred, average='weighted')
-    print(f1)
     print(clf.best_score_)
     print(clf.best_params_)
+    CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
+    score, bias = scorer(CV_probs, trainlabels, True)
+    print(score, bias)
 
-    # if args.scorer == 'f1':
-    #     scorer = f1Bias_scorer_CV
-    # else:
-    #     scorer = Twobias_scorer_CV
-    #
-    # if args.whichsearch == 'grid':
-    #     clf = GridSearchCV(svc, parameters, cv=lkf, n_jobs=-1, scoring=scorer, verbose=1, iid=False)
-    # else:
-    #     clf = RandomGridSearchCV(estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
-    #                                      scoring=scorer, n_iter=args.n_iter,
-    #                                      verbose=1, iid=False)
-    #
-    # clf.fit(traindata, trainlabels)
-    # pprint(clf.best_params_)
-    #
-    # CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
-    # score, bias = scorer(CV_probs, trainlabels, True)
-    # print(score, bias)
-    # if not bias == []:
-    #     saveModel(args.modelOutput, clf.best_estimator_, normalizer, bias)
-    #
-    #     n = len(trainlabels)
-    #
-    #     if args.scorer == 'f1':
-    #         predicted = np.asarray(CV_probs >= bias, dtype=np.int)
-    #         classified = range(n)
-    #     else:
-    #         classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
-    #         predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
-    #
-    #     print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
-    #     print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
-    #     print(metrics.classification_report(trainlabels[classified], predicted))
-    #     print(metrics.confusion_matrix(trainlabels[classified], predicted))
-    #     print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
-    #     print("Subjects: " + str(np.unique(subjects)))
-    # else:
-    #     print("Results not good")
+    if not bias == []:
+        saveModel(args.modelOutput, clf.best_estimator_, normalizer, bias)
+
+        n = len(trainlabels)
+
+        if args.scorer == 'f1':
+            predicted = np.asarray(CV_probs >= bias, dtype=np.int)
+            classified = range(n)
+        else:
+            classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
+            predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
+
+        print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
+        print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
+        print(metrics.classification_report(trainlabels[classified], predicted))
+        print(metrics.confusion_matrix(trainlabels[classified], predicted))
+        print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
+        print("Subjects: " + str(np.unique(subjects)))
+    else:
+        print("Results not good")
 
 
 cstress_model()
