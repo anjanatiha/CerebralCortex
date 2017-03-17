@@ -238,7 +238,6 @@ def readStressmarks(folder, filename):
             for line in file.readlines():
                 parts = [x.strip() for x in line.split(',')]
                 label = parts[0][:2]
-                print("\n label:\n",label)
                 features.append([participantID, label, int(parts[2]), int(parts[3])])
 
     return features
@@ -491,11 +490,19 @@ def cstress_model():
 
     lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
 
-    delta = 0.1
+    # delta = 0.1
+    # parameters = {'kernel': ['rbf'],
+    #               'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
+    #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
+    #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+
+
+    delta = 0.5
     parameters = {'kernel': ['rbf'],
-                  'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
+                  'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
