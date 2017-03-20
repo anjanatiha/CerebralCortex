@@ -214,7 +214,6 @@ def f1Bias_scorer(estimator, X, y, ret_bias=False):
     else:
         return f1
 
-
 def Twobias_scorer_CV(probs, y, ret_bias=False):
     db = np.transpose(np.vstack([probs, y]))
     db = db[np.argsort(db[:, 0]), :]
@@ -621,7 +620,6 @@ class RandomGridSearchCV(BaseSearchCV):
                 best_estimator.fit(X, **self.fit_params)
             self.best_estimator_ = best_estimator
         return self
-
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
