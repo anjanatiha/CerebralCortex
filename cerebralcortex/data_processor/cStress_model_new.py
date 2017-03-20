@@ -83,9 +83,6 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
 
     return [score, parameters]  # scoring_time]
 
-
-
-
 def decodeLabel(label):
     label = label[:2]  # Only the first 2 characters designate the label code
 
@@ -417,8 +414,7 @@ class GridSearchCV(BaseSearchCV):
                       for (train, test) in cv]
 
 
-        # Because the original python code expects a certain order for the elements, we need to
-        # respect it.
+        # Because the original python code expects a certain order for the elements
         indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
         par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
         X_bc = self.sc.broadcast(X)
@@ -639,16 +635,15 @@ def cstress_model():
     normalizer = preprocessing.StandardScaler()
     traindata = normalizer.fit_transform(traindata)
 
-    X_train, X_test, y_train, y_test = train_test_split(traindata, trainlabels, test_size=0.3, random_state=0)
+    lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
+    #lkf = StratifiedKFold(subjects, n_folds=len(np.unique(subjects)))
 
-    lkf = StratifiedKFold(trainlabels, n_folds=3)
     delta = 0.5
     parameters = {'kernel': ['rbf'],
                   'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
                   'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
-    scorer = Twobias_scorer_CV
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
     if args.scorer == 'f1':
@@ -665,11 +660,11 @@ def cstress_model():
 
     clf.fit(traindata, trainlabels)
     sc.stop(); SparkSession._instantiatedContext = None
-    print(clf.best_score_)
-    print(clf.best_params_)
+    print("best score: ", clf.best_score_)
+    print("best params: ", clf.best_params_)
     CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
     score, bias = scorer(CV_probs, trainlabels, True)
-    print(score, bias)
+    print("score and bias: ", score, bias)
 
     if not bias == []:
         saveModel(args.modelOutput, clf.best_estimator_, normalizer, bias)
