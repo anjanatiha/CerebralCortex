@@ -621,6 +621,10 @@ class RandomGridSearchCV(BaseSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
+def param_iter(parameters, n_iter, random_state):
+    parameter_iterable = ParameterSampler(parameters, n_iter, random_state)
+    return [i for i in parameter_iterable]
+
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
     groundtruth = readStressmarks(args.featureFolder, args.stressFile)
@@ -656,7 +660,9 @@ def cstress_model():
                                  scoring=None, n_iter=args.n_iter,
                                  verbose=1, iid=False)
 
-    clf.fit(traindata, trainlabels)
+    # clf.fit(traindata, trainlabels)
+    parameter_iterable = param_iter(parameters, args.n_iter, 0)
+    clf._fit(traindata, trainlabels, parameter_iterable)
     sc.stop(); SparkSession._instantiatedContext = None
     print("best score: ", clf.best_score_)
     print("best params: ", clf.best_params_)
