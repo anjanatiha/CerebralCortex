@@ -505,9 +505,9 @@ class RandomGridSearchCV(RandomizedSearchCV):
 
         self.sc = sc
         self.param_distributions = param_distributions
-        self.n_iter=n_iter
-        self.grid_scores_ = None
-        _check_param_grid(param_distributions)
+        self.n_iter = n_iter
+        # self.grid_scores_ = None
+        # _check_param_grid(param_distributions)
 
     def fit(self, X, y):
         """Actual fitting,  performing the search over parameters."""
