@@ -362,16 +362,16 @@ def cross_val_probs(estimator, X, y, cv):
 
 class ModifiedGridSearchCV(RandomizedSearchCV):
 
-    def __init__(self, sc, estimator, param_distributions, n_iter, scoring=None, fit_params=None,
-                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', error_score='raise'):
+    def __init__(self, sc, estimator, param_distributions, scoring=None,
+                 fit_params=None, n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                 pre_dispatch='2*n_jobs', random_state=None, error_score='raise'):
         super(ModifiedGridSearchCV, self).__init__(
-            estimator=estimator, param_distributions=param_distributions, n_iter=n_iter, scoring=scoring, fit_params=fit_params, n_jobs=n_jobs, iid=iid,
-            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch, error_score=error_score)
+            estimator=estimator, param_distributions=param_distributions, scoring=scoring,
+            fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
+            pre_dispatch=pre_dispatch, random_state=random_state, error_score=error_score)
         self.sc = sc
         self.param_distributions = param_distributions
-        self.n_iter = n_iter
-        self.grid_scores_ = None
+        #self.grid_scores_ = None
         _check_param_grid(param_distributions)
 
     def fit(self, X, y):
@@ -379,11 +379,14 @@ class ModifiedGridSearchCV(RandomizedSearchCV):
 
         estimator = self.estimator
         cv = self.cv
-        param_distributions = self.param_distributions
         self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
-        n_iter=self.n_iter
+        param_distributions = self.param_distributions
+
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
+
+        parameter_iterable = ParameterGrid(param_distributions)
+        print(parameter_iterable)
 
         if y is not None:
             if len(y) != n_samples:
@@ -393,16 +396,17 @@ class ModifiedGridSearchCV(RandomizedSearchCV):
         cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
 
         if self.verbose > 0:
-            if isinstance(param_distributions, Sized):
-                n_candidates = len(param_distributions)
+            if isinstance(parameter_iterable, Sized):
+                n_candidates = len(parameter_iterable)
                 print("Fitting {0} folds for each of {1} candidates, totalling"
                       " {2} fits".format(len(cv), n_candidates,
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
+        pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
-                      for parameters in param_distributions
+                      for parameters in parameter_iterable
                       for (train, test) in cv]
 
 
@@ -482,12 +486,12 @@ class ModifiedGridSearchCV(RandomizedSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
-class ModifiedRandomGridSearchCV(RandomizedSearchCV):
+class RandomGridSearchCV(RandomizedSearchCV):
 
     def __init__(self, sc, estimator, param_distributions, n_iter, scoring=None, fit_params=None,
                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
                  pre_dispatch='2*n_jobs', random_state=None, error_score='raise'):
-        super(ModifiedRandomGridSearchCV, self).__init__(
+        super(RandomGridSearchCV, self).__init__(
             estimator=estimator, param_distributions=param_distributions, n_iter=n_iter, scoring=scoring, random_state=random_state,
             fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
             pre_dispatch=pre_dispatch, error_score=error_score)
@@ -607,9 +611,6 @@ class ModifiedRandomGridSearchCV(RandomizedSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
-def param_iter(parameters, n_iter, random_state):
-    parameter_iterable = ParameterSampler(parameters, n_iter, random_state)
-    return [i for i in parameter_iterable]
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
@@ -640,10 +641,10 @@ def cstress_model():
         scorer = Twobias_scorer_CV
 
     if args.whichsearch == 'grid':
-        clf = ModifiedGridSearchCV(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
-                           n_iter=args.n_iter, verbose=1, iid=False)
+        clf = ModifiedGridSearchCV(sc=sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+                                   scoring=None, verbose=1, iid=False)
     else:
-        clf = ModifiedRandomGridSearchCV(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+        clf = RandomGridSearchCV(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
                                  scoring=None, n_iter=args.n_iter,
                                  verbose=1, iid=False)
 

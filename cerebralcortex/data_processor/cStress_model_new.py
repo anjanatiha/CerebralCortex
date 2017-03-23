@@ -519,7 +519,7 @@ class RandomGridSearchCV(RandomizedSearchCV):
         n_iter=self.n_iter
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
-        parameter_iterable = ParameterSampler(self.param_distributions, self.n_iter, random_state=self.random_state)
+        parameter_iterable = ParameterSampler(param_distributions, n_iter, random_state=self.random_state)
 
         if y is not None:
             if len(y) != n_samples:
@@ -618,9 +618,6 @@ class RandomGridSearchCV(RandomizedSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
-def param_iter(parameters, n_iter, random_state):
-    parameter_iterable = ParameterSampler(parameters, n_iter, random_state)
-    return [i for i in parameter_iterable]
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
