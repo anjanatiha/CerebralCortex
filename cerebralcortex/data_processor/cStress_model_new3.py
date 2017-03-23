@@ -360,41 +360,33 @@ def cross_val_probs(estimator, X, y, cv):
     return probs
 
 
-class GridSearchCV(BaseSearchCV):
+class ModifiedGridSearchCV(RandomizedSearchCV):
 
-    def __init__(self, sc, estimator, param_grid, scoring=None, fit_params=None,
-                 n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', error_score='raise'):
-        super(GridSearchCV, self).__init__(
-            estimator, scoring, fit_params, n_jobs, iid,   #add param_grid
-            refit, cv, verbose, pre_dispatch, error_score)
+    def __init__(self, sc, estimator, param_distributions, scoring=None,
+                 fit_params=None, n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                 pre_dispatch='2*n_jobs', random_state=None, error_score='raise'):
+        super(ModifiedGridSearchCV, self).__init__(
+            estimator=estimator, param_distributions=param_distributions, scoring=scoring,
+            fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
+            pre_dispatch=pre_dispatch, random_state=random_state, error_score=error_score)
         self.sc = sc
-        self.param_grid = param_grid
-        self.grid_scores_ = None
-        _check_param_grid(param_grid)
+        self.param_distributions = param_distributions
+        #self.grid_scores_ = None
+        _check_param_grid(param_distributions)
 
-    def fit(self, X, y=None):
-        """Run fit with all sets of parameters.
-        Parameters
-        ----------
-        X : array-like, shape = [n_samples, n_features]
-            Training vector, where n_samples is the number of samples and
-            n_features is the number of features.
-        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
-            Target relative to X for classification or regression;
-            None for unsupervised learning.
-        """
-        return self._fit(X, y, ParameterGrid(self.param_grid))
-
-    def _fit(self, X, y, parameter_iterable):
+    def fit(self, X, y):
         """Actual fitting,  performing the search over parameters."""
 
         estimator = self.estimator
         cv = self.cv
         self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
+        param_distributions = self.param_distributions
 
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
+
+        parameter_iterable = ParameterGrid(param_distributions)
+        print(parameter_iterable)
 
         if y is not None:
             if len(y) != n_samples:
@@ -411,6 +403,7 @@ class GridSearchCV(BaseSearchCV):
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
+        pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
                       for parameters in parameter_iterable
@@ -519,7 +512,7 @@ class RandomGridSearchCV(RandomizedSearchCV):
         n_iter=self.n_iter
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
-        parameter_iterable = ParameterSampler(param_distributions, n_iter, random_state=self.random_state)
+        parameter_iterable = ParameterSampler(self.param_distributions, self.n_iter, random_state=self.random_state)
 
         if y is not None:
             if len(y) != n_samples:
@@ -648,7 +641,8 @@ def cstress_model():
         scorer = Twobias_scorer_CV
 
     if args.whichsearch == 'grid':
-        clf = GridSearchCV(svc, parameters, cv=None, n_jobs=-1, scoring=None, verbose=1, iid=False)
+        clf = ModifiedGridSearchCV(sc=sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+                                   scoring=None, verbose=1, iid=False)
     else:
         clf = RandomGridSearchCV(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
                                  scoring=None, n_iter=args.n_iter,
