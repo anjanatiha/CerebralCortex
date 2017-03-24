@@ -1,38 +1,52 @@
+
+# Copyright (c) 2016, MD2K Center of Excellence
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# * Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
 import argparse
+import os
 import json
-import numpy as np
-from collections import Counter
-from collections import Sized
 from pathlib import Path
+from collections import Sized
+from collections import Counter
+import numpy as np
 from pprint import pprint
 from sklearn import svm, metrics, preprocessing
-from sklearn.base import clone, is_classifier
-from sklearn.cross_validation import LabelKFold, StratifiedKFold
-from sklearn.cross_validation import check_cv
-from sklearn.externals.joblib import Parallel, delayed
+from sklearn.base import BaseEstimator, clone, is_classifier
+from sklearn.cross_validation import LabelKFold, StratifiedKFold, check_cv, _fit_and_score
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV, ParameterSampler, ParameterGrid
-from sklearn.metrics import f1_score
+from sklearn.grid_search import _check_param_grid, _CVScoreTuple
 from sklearn.utils.validation import _num_samples, indexable
-
+from sklearn.metrics import f1_score
+from sklearn.metrics.scorer import check_scoring
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.data_processor.cStress import cStress
-from pyspark import RDD
-import os
-
-from collections import Sized
 from pyspark.sql import SparkSession
-from sklearn import svm
-
-from sklearn.base import BaseEstimator, is_classifier, clone
-from sklearn.cross_validation import check_cv, _fit_and_score
-from sklearn.grid_search import BaseSearchCV, _check_param_grid, ParameterGrid, _CVScoreTuple, ParameterSampler
-from sklearn.metrics.scorer import check_scoring
-from sklearn.utils.validation import _num_samples, indexable
 from pyspark import SparkContext
-sc = SparkContext()
+from pyspark import RDD
 
 # Command line parameter configuration
-
 parser = argparse.ArgumentParser(description='Train and evaluate the cStress model')
 parser.add_argument('--featureFolder', dest='featureFolder', required=True,
                     help='Directory containing feature files')
@@ -52,6 +66,9 @@ args = parser.parse_args()
 
 # configuration_file = os.path.join(os.path.dirname("/home/anjana/IdeaProjects/CerebralCortexcstessmodel/cerebralcortex.yml"), 'cerebralcortex.yml')
 # CC = CerebralCortex(configuration_file, master="local[*]", name="Memphis cStress Development App")
+
+sc = SparkContext()
+
 
 def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     """Fit estimator and compute scores for a given dataset split.
@@ -82,6 +99,7 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     score = scorer(cv_probs_, y)
 
     return [score, parameters]  # scoring_time]
+
 
 def decodeLabel(label):
     label = label[:2]  # Only the first 2 characters designate the label code
@@ -213,6 +231,7 @@ def f1Bias_scorer(estimator, X, y, ret_bias=False):
         return f1, bias
     else:
         return f1
+
 
 def Twobias_scorer_CV(probs, y, ret_bias=False):
     db = np.transpose(np.vstack([probs, y]))
@@ -482,6 +501,8 @@ class GridSearchCVSparkParallel(GridSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
+
+
 class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
     def __init__(self, sc, estimator, param_distributions, n_iter, scoring=None, fit_params=None,
@@ -543,6 +564,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         error_score = self.error_score
         fas = _fit_and_score
 
+
         def fun(tup):
             (index, (parameters, train, test)) = tup
             local_estimator = clone(base_estimator)
@@ -553,6 +575,8 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
                       parameters, fit_params,
                       return_parameters=True, error_score=error_score)
             return (index, res)
+
+
         indexed_out0 = dict(par_param_grid.map(fun).collect())
         out = [indexed_out0[idx] for idx in range(len(param_grid))]
 
@@ -565,6 +589,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
         scores = list()
         grid_scores = list()
+
         for grid_start in range(0, n_fits, n_folds):
             n_test_samples = 0
             score = 0
@@ -631,13 +656,14 @@ def cstress_model():
     #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
 
-    #parameter for testing
+    #parameters for testing
     delta = 0.5
     parameters = {'kernel': ['rbf'],
               'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
               'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
-    
+
+
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
     if args.scorer == 'f1':
