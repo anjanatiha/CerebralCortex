@@ -25,26 +25,21 @@
 
 
 import argparse
-import os
 import json
 from pathlib import Path
 from collections import Sized
 from collections import Counter
 import numpy as np
-from pprint import pprint
 from sklearn import svm, metrics, preprocessing
-from sklearn.base import BaseEstimator, clone, is_classifier
-from sklearn.cross_validation import LabelKFold, StratifiedKFold, check_cv, _fit_and_score
+from sklearn.base import clone, is_classifier
+from sklearn.cross_validation import LabelKFold, check_cv, _fit_and_score
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV, ParameterSampler, ParameterGrid
 from sklearn.grid_search import _check_param_grid, _CVScoreTuple
 from sklearn.utils.validation import _num_samples, indexable
-from sklearn.metrics import f1_score
 from sklearn.metrics.scorer import check_scoring
-from cerebralcortex.CerebralCortex import CerebralCortex
-from cerebralcortex.data_processor.cStress import cStress
 from pyspark.sql import SparkSession
 from pyspark import SparkContext
-from pyspark import RDD
+
 
 # Command line parameter configuration
 parser = argparse.ArgumentParser(description='Train and evaluate the cStress model')
@@ -63,9 +58,6 @@ parser.add_argument('--featureFile', type=str, required=True, dest='featureFile'
 parser.add_argument('--stressFile', type=str, required=True, dest='stressFile',
                     help='Stress ground truth filename')
 args = parser.parse_args()
-
-# configuration_file = os.path.join(os.path.dirname("/home/anjana/IdeaProjects/CerebralCortexcstessmodel/cerebralcortex.yml"), 'cerebralcortex.yml')
-# CC = CerebralCortex(configuration_file, master="local[*]", name="Memphis cStress Development App")
 
 sc = SparkContext()
 
@@ -150,9 +142,9 @@ def checkStressMark(stressMark, pid, starttime):
     endtime = starttime + 60000  # One minute windows
     result = []
     for line in stressMark:
-        [id, gt, st, et] = line
+        [id_index, gt, st, et] = line
 
-        if id == pid and (gt not in ['c7']):
+        if id_index == pid and (gt not in ['c7']):
             if (starttime > st) and (endtime < et):
                 result.append(gt)
 
@@ -174,38 +166,38 @@ def analyze_events_with_features(features, stress_marks):
             startTimes[pid] = min(startTimes[pid], start)
 
     for line in features:
-        id = line[0]
+        id_index = line[0]
         ts = line[1]
         f = line[2:]
 
-        if ts < startTimes[id]:
+        if ts < startTimes[id_index]:
             continue  # Outside of starting time
 
-        label = checkStressMark(stress_marks, id, ts)
+        label = checkStressMark(stress_marks, id_index, ts)
         if len(label) > 0:
             stressClass = decodeLabel(label[0][0])
 
             featureLabels.append(stressClass)
             finalFeatures.append(f)
-            subjects.append(id)
+            subjects.append(id_index)
 
     return finalFeatures, featureLabels, subjects
 
 
 def get_svmdataset(traindata, trainlabels):
-    input = []
-    output = []
-    foldinds = []
+    input_data = []
+    output_data = []
+    foldinds_val = []
 
     for i in range(len(trainlabels)):
         if trainlabels[i] == 1:
-            foldinds.append(i)
+            foldinds_val.append(i)
 
         if trainlabels[i] == 0:
-            foldinds.append(i)
+            foldinds_val.append(i)
 
-    input = np.array(input, dtype='float64')
-    return output, input, foldinds
+    input_data = np.array(input_data, dtype='float64')
+    return output_data, input_data, foldinds_val
 
 
 def reduceData(data, r):
@@ -418,7 +410,7 @@ class GridSearchCVSparkParallel(GridSearchCV):
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
-        pre_dispatch = self.pre_dispatch
+        #pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
                       for parameters in parameter_iterable
@@ -524,9 +516,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
         estimator = self.estimator
         cv = self.cv
-        param_distributions = self.param_distributions
         self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
-        n_iter=self.n_iter
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
         parameter_iterable = ParameterSampler(self.param_distributions, self.n_iter, random_state=self.random_state)
@@ -546,7 +536,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
-        pre_dispatch = self.pre_dispatch
+        #pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
                       for parameters in parameter_iterable
