@@ -20,17 +20,15 @@ from pyspark import RDD
 import os
 
 from collections import Sized
-import numpy as np
 from pyspark.sql import SparkSession
-from sklearn import datasets, svm
+from sklearn import svm
 
 from sklearn.base import BaseEstimator, is_classifier, clone
-from sklearn.cross_validation import KFold, check_cv, _fit_and_score, _safe_split, train_test_split
+from sklearn.cross_validation import check_cv, _fit_and_score
 from sklearn.grid_search import BaseSearchCV, _check_param_grid, ParameterGrid, _CVScoreTuple, ParameterSampler
 from sklearn.metrics.scorer import check_scoring
 from sklearn.utils.validation import _num_samples, indexable
-from spark_sklearn.util import createLocalSparkSession
-from pyspark import SparkContext, SparkConf
+from pyspark import SparkContext
 sc = SparkContext()
 
 # Command line parameter configuration
@@ -312,7 +310,7 @@ def saveModel(filename, model, normparams, bias=0.5):
 
     class KernelParam(Object):
         def __init__(self, name, value):
-            self.name = name;
+            self.name = name
             self.value = value
 
     class Support(Object):
@@ -327,12 +325,12 @@ def saveModel(filename, model, normparams, bias=0.5):
 
     class SVCModel(Object):
         def __init__(self, modelName, modelType, intercept, bias, probA, probB, kernel, support, normparams):
-            self.modelName = modelName;
-            self.modelType = modelType;
-            self.intercept = intercept;
-            self.bias = bias;
-            self.probA = probA;
-            self.probB = probB;
+            self.modelName = modelName
+            self.modelType = modelType
+            self.intercept = intercept
+            self.bias = bias
+            self.probA = probA
+            self.probB = probB
             self.kernel = kernel
             self.support = support
             self.normparams = normparams
@@ -625,12 +623,21 @@ def cstress_model():
 
     lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
 
-    delta = 0.1
-    parameters = {'kernel': ['rbf'],
-                  'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
-                  'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+    #Original Parameters of cStress Model
+    # delta = 0.1
+    # parameters = {'kernel': ['rbf'],
+    #               'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
+    #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
+    #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
+
+    #parameter for testing
+    delta = 0.5
+    parameters = {'kernel': ['rbf'],
+              'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
+              'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
+              'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+    
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
     if args.scorer == 'f1':
@@ -677,6 +684,8 @@ def cstress_model():
         print("Subjects: " + str(np.unique(subjects)))
     else:
         print("Results not good")
+
+
 
 
 cstress_model()
