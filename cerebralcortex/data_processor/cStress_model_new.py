@@ -19,6 +19,7 @@ from sklearn.utils.validation import _num_samples, indexable
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.data_processor.cStress import cStress
 from pyspark import RDD
+import os
 
 ###################################################
 
@@ -56,6 +57,8 @@ parser.add_argument('--stressFile', type=str, required=True, dest='stressFile',
                     help='Stress ground truth filename')
 args = parser.parse_args()
 
+# configuration_file = os.path.join(os.path.dirname("/home/anjana/IdeaProjects/CerebralCortexcstessmodel/cerebralcortex.yml"), 'cerebralcortex.yml')
+# CC = CerebralCortex(configuration_file, master="local[*]", name="Memphis cStress Development App")
 
 def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     """Fit estimator and compute scores for a given dataset split.
@@ -552,6 +555,7 @@ class RandomGridSearchCV(RandomizedSearchCV):
             local_estimator = clone(base_estimator)
             local_X = X_bc.value
             local_y = y_bc.value
+            #cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
             res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
                       parameters, fit_params,
                       return_parameters=True, error_score=error_score)
@@ -627,10 +631,16 @@ def cstress_model():
     lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
     #lkf = StratifiedKFold(subjects, n_folds=len(np.unique(subjects)))
 
-    delta = 0.5
+    # delta = 0.5
+    # parameters = {'kernel': ['rbf'],
+    #               'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+    #               'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
+    #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
+
+    delta = 0.1
     parameters = {'kernel': ['rbf'],
-                  'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
