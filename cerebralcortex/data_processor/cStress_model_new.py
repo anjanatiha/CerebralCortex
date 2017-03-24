@@ -93,7 +93,7 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     return [score, parameters]  # scoring_time]
 
 
-def decodeLabel(label):
+def decode_label(label):
     label = label[:2]  # Only the first 2 characters designate the label code
 
     mapping = {'c1': 0, 'c2': 1, 'c3': 1, 'c4': 0, 'c5': 0, 'c6': 0, 'c7': 2, }
@@ -101,7 +101,7 @@ def decodeLabel(label):
     return mapping[label]
 
 
-def readFeatures(folder, filename):
+def read_features(folder, filename):
     features = []
 
     path = Path(folder)
@@ -120,7 +120,7 @@ def readFeatures(folder, filename):
     return features
 
 
-def readStressmarks(folder, filename):
+def read_stress_marks(folder, filename):
     features = []
 
     path = Path(folder)
@@ -138,14 +138,14 @@ def readStressmarks(folder, filename):
     return features
 
 
-def checkStressMark(stressMark, pid, starttime):
-    endtime = starttime + 60000  # One minute windows
+def check_stress_mark(stress_mark, pid, start_time):
+    end_time = start_time + 60000  # One minute windows
     result = []
-    for line in stressMark:
+    for line in stress_mark:
         [id_index, gt, st, et] = line
 
         if id_index == pid and (gt not in ['c7']):
-            if (starttime > st) and (endtime < et):
+            if (start_time > st) and (end_time < et):
                 result.append(gt)
 
     data = Counter(result)
@@ -157,25 +157,25 @@ def analyze_events_with_features(features, stress_marks):
     finalFeatures = []
     subjects = []
 
-    startTimes = {}
+    start_times = {}
     for pid, label, start, end in stress_marks:
         if label == 'c4':
-            if pid not in startTimes:
-                startTimes[pid] = np.inf
+            if pid not in start_times:
+                start_times[pid] = np.inf
 
-            startTimes[pid] = min(startTimes[pid], start)
+            start_times[pid] = min(start_times[pid], start)
 
     for line in features:
         id_index = line[0]
         ts = line[1]
         f = line[2:]
 
-        if ts < startTimes[id_index]:
+        if ts < start_times[id_index]:
             continue  # Outside of starting time
 
-        label = checkStressMark(stress_marks, id_index, ts)
+        label = check_stress_mark(stress_marks, id_index, ts)
         if len(label) > 0:
-            stressClass = decodeLabel(label[0][0])
+            stressClass = decode_label(label[0][0])
 
             featureLabels.append(stressClass)
             finalFeatures.append(f)
@@ -189,28 +189,28 @@ def get_svmdataset(traindata, trainlabels):
     output_data = []
     foldinds_val = []
 
-    for i in range(len(trainlabels)):
-        if trainlabels[i] == 1:
-            foldinds_val.append(i)
+    for index in enumerate(trainlabels):
+        if trainlabels[index] == 1:
+            foldinds_val.append(index)
 
-        if trainlabels[i] == 0:
-            foldinds_val.append(i)
+        if trainlabels[index] == 0:
+            foldinds_val.append(index)
 
     input_data = np.array(input_data, dtype='float64')
     return output_data, input_data, foldinds_val
 
 
-def reduceData(data, r):
+def reduce_data(data, r):
     result = []
     for d in data:
         result.append([d[i] for i in r])
     return result
 
 
-def f1Bias_scorer(estimator, X, y, ret_bias=False):
+def f1_bias_scorer(estimator, X, y, ret_bias=False):
     probas_ = estimator.predict_proba(X)
     precision, recall, thresholds = metrics.precision_recall_curve(y, probas_[:, 1])
-
+    bias = 0.0
     f1 = 0.0
     for i in range(0, len(thresholds)):
         if not (precision[i] == 0 and recall[i] == 0):
@@ -225,7 +225,7 @@ def f1Bias_scorer(estimator, X, y, ret_bias=False):
         return f1
 
 
-def Twobias_scorer_CV(probs, y, ret_bias=False):
+def two_bias_scorer_CV(probs, y, ret_bias=False):
     db = np.transpose(np.vstack([probs, y]))
     db = db[np.argsort(db[:, 0]), :]
 
@@ -239,14 +239,15 @@ def Twobias_scorer_CV(probs, y, ret_bias=False):
     minloss = 1
 
     for i in range(n):
-        #		p = db[i,1]
+        # p = db[i,1]
         if db[i, 1] == 1:  # positive
             tp -= 1.0
         else:
             tn += 1.0
 
         # v1 = tp/pos
-        #		v2 = tn/neg
+        # v2 = tn/neg
+
         if tp / pos >= 0.95 and tn / neg >= 0.95:
             optbias = [db[i, 0], db[i, 0]]
             continue
@@ -257,7 +258,7 @@ def Twobias_scorer_CV(probs, y, ret_bias=False):
         running_tn = tn
 
         for j in range(i + 1, n):
-            #			p1 = db[j,1]
+            # p1 = db[j,1]
             if db[j, 1] == 1:  # positive
                 running_tp -= 1.0
                 running_pos -= 1
@@ -269,7 +270,7 @@ def Twobias_scorer_CV(probs, y, ret_bias=False):
                 break
 
             # v1 = running_tp/running_pos
-            #			v2 = running_tn/running_neg
+            # v2 = running_tn/running_neg
 
             if running_tp / running_pos >= 0.95 and running_tn / running_neg >= 0.95 and lost < minloss:
                 minloss = lost
@@ -281,10 +282,11 @@ def Twobias_scorer_CV(probs, y, ret_bias=False):
         return -minloss
 
 
-def f1Bias_scorer_CV(probs, y, ret_bias=False):
+def f1_bias_scorer_CV(probs, y, ret_bias=False):
     precision, recall, thresholds = metrics.precision_recall_curve(y, probs)
 
     f1 = 0.0
+    bias = 0.0
     for i in range(0, len(thresholds)):
         if not (precision[i] == 0 and recall[i] == 0):
             f = 2 * (precision[i] * recall[i]) / (precision[i] + recall[i])
@@ -298,7 +300,7 @@ def f1Bias_scorer_CV(probs, y, ret_bias=False):
         return f1
 
 
-def svmOutput(filename, traindata, trainlabels):
+def svm_output(filename, traindata, trainlabels):
     with open(filename, 'w') as f:
         for i in range(0, len(trainlabels)):
             f.write(str(trainlabels[i]))
@@ -308,7 +310,7 @@ def svmOutput(filename, traindata, trainlabels):
             f.write("\n")
 
 
-def saveModel(filename, model, normparams, bias=0.5):
+def save_model(filename, model, normparams, bias=0.5):
     class Object:
         def to_JSON(self):
             return json.dumps(self, default=lambda o: o.__dict__,
@@ -353,18 +355,19 @@ def saveModel(filename, model, normparams, bias=0.5):
                      [NormParam(normparams.mean_[i], normparams.scale_[i]) for i in range(len(normparams.scale_))])
 
     with open(filename, 'w') as f:
-        #print >> f, model.to_JSON()
-        #print(model.to_JSON(), end="", file=f)
+        # print >> f, model.to_JSON()
+        # print(model.to_JSON(), end="", file=f)
         f.write(model.to_JSON())
 
+
 def cross_val_probs(estimator, X, y, cv):
-    probs = np.zeros(len(y))
+    predicted_values = np.zeros(len(y))
 
     for train, test in cv:
         temp = estimator.fit(X[train], y[train]).predict_proba(X[test])
-        probs[test] = temp[:, 1]
+        predicted_values[test] = temp[:, 1]
 
-    return probs
+    return predicted_values
 
 
 class GridSearchCVSparkParallel(GridSearchCV):
@@ -376,17 +379,18 @@ class GridSearchCVSparkParallel(GridSearchCV):
             estimator=estimator, param_grid=param_grid, scoring=scoring,
             fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
             pre_dispatch=pre_dispatch, error_score=error_score)
+
         self.sc = sc
         self.param_grid = param_grid
-        #self.grid_scores_ = None
-        _check_param_grid(param_grid)
+        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
+        # self.grid_scores_ = None
+        # _check_param_grid(param_grid)
 
     def fit(self, X, y):
         """Actual fitting,  performing the search over parameters."""
 
         estimator = self.estimator
         cv = self.cv
-        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
         param_grid = self.param_grid
 
         n_samples = _num_samples(X)
@@ -410,12 +414,11 @@ class GridSearchCVSparkParallel(GridSearchCV):
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
-        #pre_dispatch = self.pre_dispatch
+        # pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
                       for parameters in parameter_iterable
                       for (train, test) in cv]
-
 
         # Because the original python code expects a certain order for the elements
         indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
@@ -504,10 +507,10 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
             estimator=estimator, param_distributions=param_distributions, n_iter=n_iter, scoring=scoring, random_state=random_state,
             fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
             pre_dispatch=pre_dispatch, error_score=error_score)
-
         self.sc = sc
         self.param_distributions = param_distributions
         self.n_iter = n_iter
+        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
         # self.grid_scores_ = None
         # _check_param_grid(param_distributions)
 
@@ -516,7 +519,6 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
         estimator = self.estimator
         cv = self.cv
-        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
         parameter_iterable = ParameterSampler(self.param_distributions, self.n_iter, random_state=self.random_state)
@@ -536,7 +538,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
                                          n_candidates * len(cv)))
 
         base_estimator = clone(self.estimator)
-        #pre_dispatch = self.pre_dispatch
+        # pre_dispatch = self.pre_dispatch
 
         param_grid = [(parameters, train, test)
                       for parameters in parameter_iterable
@@ -560,12 +562,11 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
             local_estimator = clone(base_estimator)
             local_X = X_bc.value
             local_y = y_bc.value
-            #cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
+            # cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
             res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
                       parameters, fit_params,
                       return_parameters=True, error_score=error_score)
             return (index, res)
-
 
         indexed_out0 = dict(par_param_grid.map(fun).collect())
         out = [indexed_out0[idx] for idx in range(len(param_grid))]
@@ -624,9 +625,9 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         return self
 
 
-def cstress_model():
-    features = readFeatures(args.featureFolder, args.featureFile)
-    groundtruth = readStressmarks(args.featureFolder, args.stressFile)
+def cstress_spark_parallel_model_main():
+    features = read_features(args.featureFolder, args.featureFile)
+    groundtruth = read_stress_marks(args.featureFolder, args.stressFile)
 
     traindata, trainlabels, subjects = analyze_events_with_features(features, groundtruth)
 
@@ -657,9 +658,9 @@ def cstress_model():
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
     if args.scorer == 'f1':
-        scorer = f1Bias_scorer_CV
+        scorer = f1_bias_scorer_CV
     else:
-        scorer = Twobias_scorer_CV
+        scorer = two_bias_scorer_CV
 
     if args.whichsearch == 'grid':
         clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
@@ -681,7 +682,7 @@ def cstress_model():
     print("score and bias: ", score, bias)
 
     if not bias == []:
-        saveModel(args.modelOutput, clf.best_estimator_, normalizer, bias)
+        save_model(args.modelOutput, clf.best_estimator_, normalizer, bias)
 
         n = len(trainlabels)
 
@@ -704,4 +705,4 @@ def cstress_model():
 
 
 
-#cstress_model()
+cstress_spark_parallel_model_main()
