@@ -14,14 +14,10 @@ from sklearn.grid_search import GridSearchCV, RandomizedSearchCV, ParameterSampl
 from sklearn.metrics import f1_score
 from sklearn.utils.validation import _num_samples, indexable
 
-########################################################
-
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.data_processor.cStress import cStress
 from pyspark import RDD
 import os
-
-###################################################
 
 from collections import Sized
 import numpy as np
@@ -35,9 +31,8 @@ from sklearn.metrics.scorer import check_scoring
 from sklearn.utils.validation import _num_samples, indexable
 from spark_sklearn.util import createLocalSparkSession
 from pyspark import SparkContext, SparkConf
-# conf = SparkConf().setAppName("aaa").setMaster("aaa")
 sc = SparkContext()
-######################################################
+
 # Command line parameter configuration
 
 parser = argparse.ArgumentParser(description='Train and evaluate the cStress model')
@@ -363,19 +358,19 @@ def cross_val_probs(estimator, X, y, cv):
     return probs
 
 
-class ModifiedGridSearchCV(RandomizedSearchCV):
+class GridSearchCVSparkParallel(GridSearchCV):
 
-    def __init__(self, sc, estimator, param_distributions, scoring=None,
+    def __init__(self, sc, estimator, param_grid, scoring=None,
                  fit_params=None, n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
-                 pre_dispatch='2*n_jobs', random_state=None, error_score='raise'):
-        super(ModifiedGridSearchCV, self).__init__(
-            estimator=estimator, param_distributions=param_distributions, scoring=scoring,
+                 pre_dispatch='2*n_jobs', error_score='raise'):
+        super(GridSearchCVSparkParallel, self).__init__(
+            estimator=estimator, param_grid=param_grid, scoring=scoring,
             fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
-            pre_dispatch=pre_dispatch, random_state=random_state, error_score=error_score)
+            pre_dispatch=pre_dispatch, error_score=error_score)
         self.sc = sc
-        self.param_distributions = param_distributions
+        self.param_grid = param_grid
         #self.grid_scores_ = None
-        _check_param_grid(param_distributions)
+        _check_param_grid(param_grid)
 
     def fit(self, X, y):
         """Actual fitting,  performing the search over parameters."""
@@ -383,12 +378,12 @@ class ModifiedGridSearchCV(RandomizedSearchCV):
         estimator = self.estimator
         cv = self.cv
         self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
-        param_distributions = self.param_distributions
+        param_grid = self.param_grid
 
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
 
-        parameter_iterable = ParameterGrid(param_distributions)
+        parameter_iterable = ParameterGrid(param_grid)
         print(parameter_iterable)
 
         if y is not None:
@@ -489,12 +484,12 @@ class ModifiedGridSearchCV(RandomizedSearchCV):
             self.best_estimator_ = best_estimator
         return self
 
-class RandomGridSearchCV(RandomizedSearchCV):
+class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
     def __init__(self, sc, estimator, param_distributions, n_iter, scoring=None, fit_params=None,
                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
                  pre_dispatch='2*n_jobs', random_state=None, error_score='raise'):
-        super(RandomGridSearchCV, self).__init__(
+        super(RandomGridSearchCVSparkParallel, self).__init__(
             estimator=estimator, param_distributions=param_distributions, n_iter=n_iter, scoring=scoring, random_state=random_state,
             fit_params=fit_params, n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
             pre_dispatch=pre_dispatch, error_score=error_score)
@@ -629,13 +624,6 @@ def cstress_model():
     traindata = normalizer.fit_transform(traindata)
 
     lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
-    #lkf = StratifiedKFold(subjects, n_folds=len(np.unique(subjects)))
-
-    # delta = 0.5
-    # parameters = {'kernel': ['rbf'],
-    #               'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
-    #               'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
-    #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     delta = 0.1
     parameters = {'kernel': ['rbf'],
@@ -651,10 +639,10 @@ def cstress_model():
         scorer = Twobias_scorer_CV
 
     if args.whichsearch == 'grid':
-        clf = ModifiedGridSearchCV(sc=sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+        clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
                                    scoring=None, verbose=1, iid=False)
     else:
-        clf = RandomGridSearchCV(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+        clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
                                  scoring=None, n_iter=args.n_iter,
                                  verbose=1, iid=False)
 
