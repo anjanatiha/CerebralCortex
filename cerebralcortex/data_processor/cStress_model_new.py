@@ -315,8 +315,8 @@ def saveModel(filename, model, normparams, bias=0.5):
                               sort_keys=True, indent=4)
 
     class Kernel(Object):
-        def __init__(self, type, parameters):
-            self.type = type
+        def __init__(self, type_val, parameters):
+            self.type_val = type_val
             self.parameters = parameters
 
     class KernelParam(Object):
