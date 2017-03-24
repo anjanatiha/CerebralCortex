@@ -87,8 +87,8 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
         The parameters that have been evaluated.
     """
     estimator.set_params(**parameters)
-    cv_probs_ = cross_val_probs(estimator, X, y, cv)
-    score = scorer(cv_probs_, y)
+    cv_predictions = cross_val_probs(estimator, X, y, cv)
+    score = scorer(cv_predictions, y)
 
     return [score, parameters]  # scoring_time]
 
@@ -108,15 +108,13 @@ def read_features(folder, filename):
     files = list(path.glob('**/' + filename))
 
     for f in files:
-        participantID = int(f.parent.name[2:])
+        participant_id = int(f.parent.name[2:])
         with f.open() as file:
             for line in file.readlines():
                 parts = [x.strip() for x in line.split(',')]
-
-                featureVector = [participantID, int(parts[0])]
-                featureVector.extend([float(p) for p in parts[1:]])
-
-                features.append(featureVector)
+                feature_vector = [participant_id, int(parts[0])]
+                feature_vector.extend([float(p) for p in parts[1:]])
+                features.append(feature_vector)
     return features
 
 
@@ -153,8 +151,8 @@ def check_stress_mark(stress_mark, pid, start_time):
 
 
 def analyze_events_with_features(features, stress_marks):
-    featureLabels = []
-    finalFeatures = []
+    feature_labels = []
+    final_features = []
     subjects = []
 
     start_times = {}
@@ -175,13 +173,13 @@ def analyze_events_with_features(features, stress_marks):
 
         label = check_stress_mark(stress_marks, id_index, ts)
         if len(label) > 0:
-            stressClass = decode_label(label[0][0])
+            stress_class = decode_label(label[0][0])
 
-            featureLabels.append(stressClass)
-            finalFeatures.append(f)
+            feature_labels.append(stress_class)
+            final_features.append(f)
             subjects.append(id_index)
 
-    return finalFeatures, featureLabels, subjects
+    return final_features, feature_labels, subjects
 
 
 def get_svmdataset(traindata, trainlabels):
@@ -280,7 +278,6 @@ def two_bias_scorer_CV(probs, y, ret_bias=False):
         return -minloss, optbias
     else:
         return -minloss
-
 
 def f1_bias_scorer_CV(probs, y, ret_bias=False):
     precision, recall, thresholds = metrics.precision_recall_curve(y, probs)
@@ -440,7 +437,7 @@ class GridSearchCVSparkParallel(GridSearchCV):
             res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
                       parameters, fit_params,
                       return_parameters=True, error_score=error_score)
-            return (index, res)
+            return index, res
         indexed_out0 = dict(par_param_grid.map(fun).collect())
         out = [indexed_out0[idx] for idx in range(len(param_grid))]
 
@@ -495,7 +492,6 @@ class GridSearchCVSparkParallel(GridSearchCV):
                 best_estimator.fit(X, **self.fit_params)
             self.best_estimator_ = best_estimator
         return self
-
 
 
 class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
@@ -555,7 +551,6 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         fit_params = self.fit_params
         error_score = self.error_score
         fas = _fit_and_score
-
 
         def fun(tup):
             (index, (parameters, train, test)) = tup
@@ -639,21 +634,18 @@ def cstress_spark_parallel_model_main():
 
     lkf = LabelKFold(subjects, n_folds=len(np.unique(subjects)))
 
-    #Original Parameters of cStress Model
+    # Original Parameters of cStress Model
     # delta = 0.1
     # parameters = {'kernel': ['rbf'],
     #               'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
     #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
     #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
-
-    #parameters for testing
+    # parameters for testing
     delta = 0.5
-    parameters = {'kernel': ['rbf'],
-              'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
-              'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
-              'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
-
+    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
+                  'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
 
@@ -664,11 +656,10 @@ def cstress_spark_parallel_model_main():
 
     if args.whichsearch == 'grid':
         clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
-                                   scoring=None, verbose=1, iid=False)
+                                        scoring=None, verbose=1, iid=False)
     else:
         clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
-                                 scoring=None, n_iter=args.n_iter,
-                                 verbose=1, iid=False)
+                                              scoring=None, n_iter=args.n_iter, verbose=1, iid=False)
 
     clf.fit(traindata, trainlabels)
 
@@ -701,8 +692,6 @@ def cstress_spark_parallel_model_main():
         print("Subjects: " + str(np.unique(subjects)))
     else:
         print("Results not good")
-
-
 
 
 cstress_spark_parallel_model_main()
