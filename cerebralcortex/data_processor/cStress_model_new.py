@@ -657,8 +657,8 @@ def cstress_spark_parallel_model_main():
 
     # parameters for testing
     delta = 0.5
-    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
+    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)

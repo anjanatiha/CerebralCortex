@@ -87,20 +87,10 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     parameters : dict or None, optional
         The parameters that have been evaluated.
     """
-    print("\n\n")
-    print("\n\n")
-    print("aaaa")
-    print("\n\n")
-    print(parameters)
+
     estimator.set_params(**parameters)
-    print("dsf")
-    print("\n\n")
     cv_predictions = cross_val_probs(estimator, X, y, cv)
-    print("asdhui")
-    print("\n\n")
     score = scorer(cv_predictions, y)
-    print("sdas")
-    print("\n\n")
     return [score, parameters]  # scoring_time]
 
 
@@ -578,43 +568,6 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
         self.best_params_ = best[1]
         self.best_score_ = best[0]
-        # Out is a list of triplet: score, estimator, n_test_samples
-        # n_fits = len(out)
-        # n_folds = len(cv)
-        #
-        # scores = list()
-        # grid_scores = list()
-
-        # for grid_start in range(0, n_fits, n_folds):
-        #     n_test_samples = 0
-        #     score = 0
-        #     all_scores = []
-        #     for this_score, this_n_test_samples, _, parameters in \
-        #             out[grid_start:grid_start + n_folds]:
-        #         all_scores.append(this_score)
-        #         if self.iid:
-        #             this_score *= this_n_test_samples
-        #             n_test_samples += this_n_test_samples
-        #         score += this_score
-        #     if self.iid:
-        #         score /= float(n_test_samples)
-        #     else:
-        #         score /= float(n_folds)
-        #     scores.append((score, parameters))
-        #     # TODO: shall we also store the test_fold_sizes?
-        #     grid_scores.append(_CVScoreTuple(
-        #         parameters,
-        #         score,
-        #         np.array(all_scores)))
-        # # Store the computed scores
-        # self.grid_scores_ = grid_scores
-
-        # Find the best parameters by comparing on the mean validation score:
-        # note that `sorted` is deterministic in the way it breaks ties
-        # best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
-        #               reverse=True)[0]
-        # self.best_params_ = best.parameters
-        # self.best_score_ = best.mean_validation_score
 
         if self.refit:
             # fit the best estimator using the entire dataset
@@ -665,8 +618,8 @@ def cstress_spark_parallel_model_main():
 
     # parameters for testing
     delta = 0.5
-    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
+    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-2, 2, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-2, 2, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
