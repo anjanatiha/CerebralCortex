@@ -117,7 +117,7 @@ class ModifiedGridSearchCV(GridSearchCV):
                                       parameters, cv=cv)
             for parameters in parameter_iterable)
 
-        best = sorted(out, reverse=True)[0]
+        best = sorted(out, key=lambda x: x[0], reverse=True)[0]
         self.best_params_ = best[1]
         self.best_score_ = best[0]
 
@@ -433,7 +433,7 @@ def saveModel(filename, model, normparams, bias=0.5):
 
     class KernelParam(Object):
         def __init__(self, name, value):
-            self.name = name;
+            self.name = name
             self.value = value
 
     class Support(Object):
@@ -448,12 +448,12 @@ def saveModel(filename, model, normparams, bias=0.5):
 
     class SVCModel(Object):
         def __init__(self, modelName, modelType, intercept, bias, probA, probB, kernel, support, normparams):
-            self.modelName = modelName;
-            self.modelType = modelType;
-            self.intercept = intercept;
-            self.bias = bias;
-            self.probA = probA;
-            self.probB = probB;
+            self.modelName = modelName
+            self.modelType = modelType
+            self.intercept = intercept
+            self.bias = bias
+            self.probA = probA
+            self.probB = probB
             self.kernel = kernel
             self.support = support
             self.normparams = normparams
@@ -485,11 +485,13 @@ def elaspsed_time_format_hr_min_sec(seconds):
     h, m = divmod(m, 60)
     print("total time(hour:min:sec): ", "%d:%02d:%02d" % (h, m, s))
 
+
 def elaspsed_time_format_day_hr_min_sec(seconds):
     sec = timedelta(seconds=int(seconds))
-    d = datetime(1,1,1) + sec
+    d = datetime(1, 1, 1) + sec
     print("total time (format- DAYS:HOURS:MIN:SEC)\n")
-    print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
+    print("%d:%d:%d:%d" % (d.day - 1, d.hour, d.minute, d.second))
+
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
@@ -510,7 +512,6 @@ def cstress_model():
     #               'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
     #               'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
     #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
-
 
     delta = 0.5
     parameters = {'kernel': ['rbf'],
@@ -564,4 +565,4 @@ start = time.time()
 print("start\n")
 cstress_model()
 end = time.time()
-elaspsed_time_format_day_hr_min_sec(end-start)
+elaspsed_time_format_day_hr_min_sec(end - start)

@@ -368,7 +368,8 @@ def cross_val_probs(estimator, X, y, cv):
 
     return predicted_values
 
-
+# parallel grid search(fit and cv) over each fold in data set for each parameter for all possible combination
+# in a given range of parameters on apache spark platform
 class GridSearchCVSparkParallel(GridSearchCV):
     def __init__(self, sc, estimator, param_grid, scoring=None,
                  fit_params=None, n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
@@ -496,6 +497,8 @@ class GridSearchCVSparkParallel(GridSearchCV):
         return self
 
 
+# parallel random grid search(fit and cv) over each fold of entire dataset for each parameter in a set of randomly
+# selected parameters on apache spark platform
 class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
     def __init__(self, sc, estimator, param_distributions, n_iter, scoring=None, fit_params=None,
                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
@@ -621,20 +624,20 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         return self
 
 
-def elaspsed_time_format_hr_min_sec(start, end):
-    seconds = end - start
+def elapsed_time_format_hr_min_sec(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     print("total time(hour:min:sec): ", "%d:%02d:%02d" % (h, m, s))
 
-def GetTime(seconds):
+
+def elapsed_time_format_day_hr_min_sec(seconds):
     sec = timedelta(seconds=int(seconds))
-    d = datetime(1,1,1) + sec
-    print("\n\ntotal time (format- DAYS:HOURS:MIN:SEC)")
-    print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
+    d = datetime(1, 1, 1) + sec
+    print("total time (format- DAYS:HOURS:MIN:SEC)\n")
+    print("%d:%d:%d:%d" % (d.day - 1, d.hour, d.minute, d.second))
 
 
-def cstress_spark_parallel_model_main():
+def cstress_spark_parallel_fold_param_model_main():
     features = read_features(args.featureFolder, args.featureFile)
     groundtruth = read_stress_marks(args.featureFolder, args.stressFile)
 
@@ -672,8 +675,8 @@ def cstress_spark_parallel_model_main():
         clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
                                         scoring=None, verbose=1, iid=False)
     else:
-        clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
-                                              scoring=None, n_iter=args.n_iter, verbose=1, iid=False)
+        clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf,
+                                              n_jobs=-1, scoring=None, n_iter=args.n_iter, verbose=1, iid=False)
 
     clf.fit(traindata, trainlabels)
 
@@ -711,6 +714,6 @@ def cstress_spark_parallel_model_main():
 
 start = time.time()
 print("start.............\n")
-cstress_spark_parallel_model_main()
+cstress_spark_parallel_fold_param_model_main()
 end = time.time()
-GetTime(end-start)
+elapsed_time_format_day_hr_min_sec(end - start)
