@@ -63,7 +63,7 @@ args = parser.parse_args()
 sc = SparkContext()
 
 
-def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
+def cv_fit_and_score(estimator, X, y, scorer, parameters, cv):
     """Fit estimator and compute scores for a given dataset split.
     Parameters
     ----------
@@ -87,9 +87,13 @@ def cv_fit_and_score(estimator, X, y, scorer, parameters, cv, ):
     parameters : dict or None, optional
         The parameters that have been evaluated.
     """
+    print("\naaa\n")
     estimator.set_params(**parameters)
+    print("seted\n")
     cv_predictions = cross_val_probs(estimator, X, y, cv)
+    print("cros\n")
     score = scorer(cv_predictions, y)
+    print("\nscoorer\n")
 
     return [score, parameters]  # scoring_time]
 
@@ -627,11 +631,23 @@ def elaspsed_time_format_hr_min_sec(start, end):
     h, m = divmod(m, 60)
     print("total time(hour:min:sec): ", "%d:%02d:%02d" % (h, m, s))
 
+
 def GetTime(seconds):
     sec = timedelta(seconds=int(seconds))
-    d = datetime(1,1,1) + sec
+    d = datetime(1, 1, 1) + sec
     print("\n\ntotal time (format- DAYS:HOURS:MIN:SEC)")
-    print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
+    print("%d:%d:%d:%d" % (d.day - 1, d.hour, d.minute, d.second))
+
+
+def local_fit(index, parameters, base_estimator, X, y, scorer, cv):
+    local_estimator = clone(base_estimator)
+    local_X = X
+    local_y = y
+    print("\n\n\nas\n\n\n ",index, parameters)
+    #cv_fit_and_score(estimator, X, y, scorer, parameters, cv)
+    res = cv_fit_and_score(local_estimator, local_X, local_y, scorer, parameters, cv)
+    print(res)
+    return index, res
 
 
 def cstress_spark_parallel_model_main():
@@ -656,61 +672,74 @@ def cstress_spark_parallel_model_main():
     #               'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     # parameters for testing
-    delta = 0.5
-    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-1, 1, 0.5)],
-                  'gamma': [2 ** x for x in np.arange(-1, 1, 0.5)],
+    delta = 0.1
+    parameters = {'kernel': ['rbf'], 'C': [2 ** x for x in np.arange(-12, 12, 0.5)],
+                  'gamma': [2 ** x for x in np.arange(-12, 12, 0.5)],
                   'class_weight': [{0: w, 1: 1 - w} for w in np.arange(0.0, 1.0, delta)]}
 
     svc = svm.SVC(probability=True, verbose=False, cache_size=2000)
+    scorer = f1_bias_scorer_CV
+    param_grid = ParameterSampler(parameters, 3, random_state=0)
+    # Because the original python code expects a certain order for the elements
+    indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
+    par_param_grid = sc.parallelize(indexed_param_grid, len(indexed_param_grid))
+    #indexed_output = par_param_grid.map(lambda i:i[0]).collect()
+    #print(indexed_output)
+    #indexed_output = dict(par_param_grid.map(local_fit).collect())
+    indexed_output = dict(par_param_grid.map(lambda i: local_fit(i[0], i[1], svc, traindata, trainlabels, scorer, lkf)).collect())
+    #out = [indexed_output[idx] for idx in range(len(param_grid))]
+    print("asdas")
 
-    if args.scorer == 'f1':
-        scorer = f1_bias_scorer_CV
-    else:
-        scorer = two_bias_scorer_CV
-
-    if args.whichsearch == 'grid':
-        clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
-                                        scoring=None, verbose=1, iid=False)
-    else:
-        clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
-                                              scoring=None, n_iter=args.n_iter, verbose=1, iid=False)
-
-    clf.fit(traindata, trainlabels)
-
-    sc.stop()
-    SparkSession._instantiatedContext = None
-
-    print("best score: ", clf.best_score_)
-    print("best params: ", clf.best_params_)
-
-    CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
-    score, bias = scorer(CV_probs, trainlabels, True)
-    print("score and bias: ", score, bias)
-
-    if not bias == []:
-        save_model(args.modelOutput, clf.best_estimator_, normalizer, bias)
-
-        n = len(trainlabels)
-
-        if args.scorer == 'f1':
-            predicted = np.asarray(CV_probs >= bias, dtype=np.int)
-            classified = range(n)
-        else:
-            classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
-            predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
-
-        print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
-        print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
-        print(metrics.classification_report(trainlabels[classified], predicted))
-        print(metrics.confusion_matrix(trainlabels[classified], predicted))
-        print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
-        print("Subjects: " + str(np.unique(subjects)))
-    else:
-        print("Results not good")
+    # if args.scorer == 'f1':
+    #     scorer = f1_bias_scorer_CV
+    # else:
+    #     scorer = two_bias_scorer_CV
+    #
+    # if args.whichsearch == 'grid':
+    #     clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
+    #                                     scoring=None, verbose=1, iid=False)
+    # else:
+    #     clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
+    #                                           scoring=None, n_iter=args.n_iter, verbose=1, iid=False)
+    #
+    # clf.fit(traindata, trainlabels)
+    #
+    # sc.stop()
+    # SparkSession._instantiatedContext = None
+    #
+    # print("best score: ", clf.best_score_)
+    # print("best params: ", clf.best_params_)
+    #
+    # CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
+    # score, bias = scorer(CV_probs, trainlabels, True)
+    # print("score and bias: ", score, bias)
+    #
+    # if not bias == []:
+    #     save_model(args.modelOutput, clf.best_estimator_, normalizer, bias)
+    #
+    #     n = len(trainlabels)
+    #
+    #     if args.scorer == 'f1':
+    #         predicted = np.asarray(CV_probs >= bias, dtype=np.int)
+    #         classified = range(n)
+    #     else:
+    #         classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
+    #         predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
+    #
+    #     print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
+    #     print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
+    #     print(metrics.classification_report(trainlabels[classified], predicted))
+    #     print(metrics.confusion_matrix(trainlabels[classified], predicted))
+    #     print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
+    #     print("Subjects: " + str(np.unique(subjects)))
+    # else:
+    #     print("Results not good")
+    #
+    #
 
 
 start = time.time()
 print("start.............\n")
 cstress_spark_parallel_model_main()
 end = time.time()
-GetTime(end-start)
+GetTime(end - start)

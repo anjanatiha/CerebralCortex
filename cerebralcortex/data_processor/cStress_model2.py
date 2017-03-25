@@ -538,9 +538,7 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         base_estimator = clone(self.estimator)
         # pre_dispatch = self.pre_dispatch
 
-        param_grid = [(parameters, train, test)
-                      for parameters in parameter_iterable
-                      for (train, test) in cv]
+        param_grid = [parameters for parameters in parameter_iterable]
         # Because the original python code expects a certain order for the elements
         indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
         par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
@@ -551,73 +549,73 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         verbose = self.verbose
         fit_params = self.fit_params
         error_score = self.error_score
-        fas = _fit_and_score
+        fas = cv_fit_and_score
 
         def local_fit(tup):
-            (index, (parameters, train, test)) = tup
+            (index, parameters) = tup
             local_estimator = clone(base_estimator)
             local_X = X_bc.value
             local_y = y_bc.value
 
-            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
-                      parameters, fit_params,
-                      return_parameters=True, error_score=error_score)
+            res = fas(local_estimator, local_X, local_y, self.scoring, parameters, cv=cv)
             return index, res
 
         indexed_output = dict(par_param_grid.map(local_fit).collect())
-        out = [indexed_output[idx] for idx in range(len(param_grid))]
+        print(indexed_output)
+        # print(output)
+        # out = [output[idx] for idx in range(len(param_grid))]
+        #
+        # X_bc.unpersist()
+        # y_bc.unpersist()
 
-        X_bc.unpersist()
-        y_bc.unpersist()
-
-        # Out is a list of triplet: score, estimator, n_test_samples
-        n_fits = len(out)
-        n_folds = len(cv)
-
-        scores = list()
-        grid_scores = list()
-
-        for grid_start in range(0, n_fits, n_folds):
-            n_test_samples = 0
-            score = 0
-            all_scores = []
-            for this_score, this_n_test_samples, _, parameters in \
-                    out[grid_start:grid_start + n_folds]:
-                all_scores.append(this_score)
-                if self.iid:
-                    this_score *= this_n_test_samples
-                    n_test_samples += this_n_test_samples
-                score += this_score
-            if self.iid:
-                score /= float(n_test_samples)
-            else:
-                score /= float(n_folds)
-            scores.append((score, parameters))
-            # TODO: shall we also store the test_fold_sizes?
-            grid_scores.append(_CVScoreTuple(
-                parameters,
-                score,
-                np.array(all_scores)))
-        # Store the computed scores
-        self.grid_scores_ = grid_scores
-
-        # Find the best parameters by comparing on the mean validation score:
-        # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
-                      reverse=True)[0]
-        self.best_params_ = best.parameters
-        self.best_score_ = best.mean_validation_score
-
-        if self.refit:
-            # fit the best estimator using the entire dataset
-            # clone first to work around broken estimators
-            best_estimator = clone(base_estimator).set_params(
-                **best.parameters)
-            if y is not None:
-                best_estimator.fit(X, y, **self.fit_params)
-            else:
-                best_estimator.fit(X, **self.fit_params)
-            self.best_estimator_ = best_estimator
+        # # Out is a list of triplet: score, estimator, n_test_samples
+        # n_fits = len(out)
+        # n_folds = len(cv)
+        #
+        # scores = list()
+        # grid_scores = list()
+        #
+        # for grid_start in range(0, n_fits, n_folds):
+        #     n_test_samples = 0
+        #     score = 0
+        #     all_scores = []
+        #     for this_score, this_n_test_samples, _, parameters in \
+        #             out[grid_start:grid_start + n_folds]:
+        #         all_scores.append(this_score)
+        #         if self.iid:
+        #             this_score *= this_n_test_samples
+        #             n_test_samples += this_n_test_samples
+        #         score += this_score
+        #     if self.iid:
+        #         score /= float(n_test_samples)
+        #     else:
+        #         score /= float(n_folds)
+        #     scores.append((score, parameters))
+        #     # TODO: shall we also store the test_fold_sizes?
+        #     grid_scores.append(_CVScoreTuple(
+        #         parameters,
+        #         score,
+        #         np.array(all_scores)))
+        # # Store the computed scores
+        # self.grid_scores_ = grid_scores
+        #
+        # # Find the best parameters by comparing on the mean validation score:
+        # # note that `sorted` is deterministic in the way it breaks ties
+        # best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
+        #               reverse=True)[0]
+        # self.best_params_ = best.parameters
+        # self.best_score_ = best.mean_validation_score
+        #
+        # if self.refit:
+        #     # fit the best estimator using the entire dataset
+        #     # clone first to work around broken estimators
+        #     best_estimator = clone(base_estimator).set_params(
+        #         **best.parameters)
+        #     if y is not None:
+        #         best_estimator.fit(X, y, **self.fit_params)
+        #     else:
+        #         best_estimator.fit(X, **self.fit_params)
+        #     self.best_estimator_ = best_estimator
         return self
 
 
@@ -680,37 +678,37 @@ def cstress_spark_parallel_model_main():
     sc.stop()
     SparkSession._instantiatedContext = None
 
-    print("best score: ", clf.best_score_)
-    print("best params: ", clf.best_params_)
-
-    CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
-    score, bias = scorer(CV_probs, trainlabels, True)
-    print("score and bias: ", score, bias)
-
-    if not bias == []:
-        save_model(args.modelOutput, clf.best_estimator_, normalizer, bias)
-
-        n = len(trainlabels)
-
-        if args.scorer == 'f1':
-            predicted = np.asarray(CV_probs >= bias, dtype=np.int)
-            classified = range(n)
-        else:
-            classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
-            predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
-
-        print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
-        print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
-        print(metrics.classification_report(trainlabels[classified], predicted))
-        print(metrics.confusion_matrix(trainlabels[classified], predicted))
-        print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
-        print("Subjects: " + str(np.unique(subjects)))
-    else:
-        print("Results not good")
+    # print("best score: ", clf.best_score_)
+    # print("best params: ", clf.best_params_)
+    #
+    # CV_probs = cross_val_probs(clf.best_estimator_, traindata, trainlabels, lkf)
+    # score, bias = scorer(CV_probs, trainlabels, True)
+    # print("score and bias: ", score, bias)
+    #
+    # if not bias == []:
+    #     save_model(args.modelOutput, clf.best_estimator_, normalizer, bias)
+    #
+    #     n = len(trainlabels)
+    #
+    #     if args.scorer == 'f1':
+    #         predicted = np.asarray(CV_probs >= bias, dtype=np.int)
+    #         classified = range(n)
+    #     else:
+    #         classified = np.where(np.logical_or(CV_probs <= bias[0], CV_probs >= bias[1]))[0]
+    #         predicted = np.asarray(CV_probs[classified] >= bias[1], dtype=np.int)
+    #
+    #     print("Cross-Subject (" + str(len(np.unique(subjects))) + "-fold) Validation Prediction")
+    #     print("Accuracy: " + str(metrics.accuracy_score(trainlabels[classified], predicted)))
+    #     print(metrics.classification_report(trainlabels[classified], predicted))
+    #     print(metrics.confusion_matrix(trainlabels[classified], predicted))
+    #     print("Lost: %d (%f%%)" % (n - len(classified), (n - len(classified)) * 1.0 / n))
+    #     print("Subjects: " + str(np.unique(subjects)))
+    # else:
+    #     print("Results not good")
 
 
 start = time.time()
-print("start.............\n")
+print("start...................................\n")
 cstress_spark_parallel_model_main()
 end = time.time()
 GetTime(end-start)
