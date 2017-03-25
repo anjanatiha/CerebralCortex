@@ -34,9 +34,8 @@ import time
 from datetime import timedelta, datetime
 from sklearn import svm, metrics, preprocessing
 from sklearn.base import clone, is_classifier
-from sklearn.cross_validation import LabelKFold, check_cv, _fit_and_score
+from sklearn.cross_validation import LabelKFold, check_cv
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV, ParameterSampler, ParameterGrid
-from sklearn.grid_search import _check_param_grid, _CVScoreTuple
 from sklearn.utils.validation import _num_samples, indexable
 from sklearn.metrics.scorer import check_scoring
 from pyspark.sql import SparkSession
@@ -394,8 +393,8 @@ class GridSearchCVSparkParallel(GridSearchCV):
         n_samples = _num_samples(X)
         X, y = indexable(X, y)
 
-        parameter_iterable = ParameterGrid(param_grid)
-        print(parameter_iterable)
+        param_grid = ParameterGrid(param_grid)
+        print(param_grid)
 
         if y is not None:
             if len(y) != n_samples:
@@ -405,8 +404,8 @@ class GridSearchCVSparkParallel(GridSearchCV):
         cv = check_cv(cv, X, y, classifier=is_classifier(estimator))
 
         if self.verbose > 0:
-            if isinstance(parameter_iterable, Sized):
-                n_candidates = len(parameter_iterable)
+            if isinstance(param_grid, Sized):
+                n_candidates = len(param_grid)
                 print("Fitting {0} folds for each of {1} candidates, totalling"
                       " {2} fits".format(len(cv), n_candidates,
                                          n_candidates * len(cv)))
@@ -414,9 +413,9 @@ class GridSearchCVSparkParallel(GridSearchCV):
         base_estimator = clone(self.estimator)
         # pre_dispatch = self.pre_dispatch
 
-        param_grid = [(parameters, train, test)
-                      for parameters in parameter_iterable
-                      for (train, test) in cv]
+        # param_grid = [(parameters, train, test)
+        #               for parameters in parameter_iterable
+        #               for (train, test) in cv]
 
         # Because the original python code expects a certain order for the elements
         indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
@@ -428,66 +427,23 @@ class GridSearchCVSparkParallel(GridSearchCV):
         verbose = self.verbose
         fit_params = self.fit_params
         error_score = self.error_score
-        fas = _fit_and_score
 
-        def local_fit(tup):
-            (index, (parameters, train, test)) = tup
-            local_estimator = clone(base_estimator)
-            local_X = X_bc.value
-            local_y = y_bc.value
-            res = fas(local_estimator, local_X, local_y, scorer, train, test, verbose,
-                      parameters, fit_params,
-                      return_parameters=True, error_score=error_score)
-            return index, res
-
-        indexed_output = dict(par_param_grid.map(local_fit).collect())
+        indexed_output = dict(par_param_grid.map(lambda i: local_fit(i[0], i[1], base_estimator, X_bc.value, y_bc.value, scorer, cv)).collect())
         out = [indexed_output[idx] for idx in range(len(param_grid))]
 
         X_bc.unpersist()
         y_bc.unpersist()
 
-        # Out is a list of triplet: score, estimator, n_test_samples
-        n_fits = len(out)
-        n_folds = len(cv)
+        best = sorted(out, key=lambda x: x[0], reverse=True)[0]
 
-        scores = list()
-        grid_scores = list()
-        for grid_start in range(0, n_fits, n_folds):
-            n_test_samples = 0
-            score = 0
-            all_scores = []
-            for this_score, this_n_test_samples, _, parameters in \
-                    out[grid_start:grid_start + n_folds]:
-                all_scores.append(this_score)
-                if self.iid:
-                    this_score *= this_n_test_samples
-                    n_test_samples += this_n_test_samples
-                score += this_score
-            if self.iid:
-                score /= float(n_test_samples)
-            else:
-                score /= float(n_folds)
-            scores.append((score, parameters))
-            # TODO: shall we also store the test_fold_sizes?
-            grid_scores.append(_CVScoreTuple(
-                parameters,
-                score,
-                np.array(all_scores)))
-        # Store the computed scores
-        self.grid_scores_ = grid_scores
-
-        # Find the best parameters by comparing on the mean validation score:
-        # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
-                      reverse=True)[0]
-        self.best_params_ = best.parameters
-        self.best_score_ = best.mean_validation_score
+        self.best_params_ = best[1]
+        self.best_score_ = best[0]
 
         if self.refit:
             # fit the best estimator using the entire dataset
             # clone first to work around broken estimators
             best_estimator = clone(base_estimator).set_params(
-                **best.parameters)
+                **best[1])
             if y is not None:
                 best_estimator.fit(X, y, **self.fit_params)
             else:
@@ -544,11 +500,6 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
 
         base_estimator = clone(self.estimator)
         # pre_dispatch = self.pre_dispatch
-
-        # param_grid = [(parameters, train, test)
-        #               for parameters in parameter_iterable
-        #               for (train, test) in cv]
-        # Because the original python code expects a certain order for the elements
         indexed_param_grid = list(zip(range(len(param_grid)), param_grid))
         par_param_grid = self.sc.parallelize(indexed_param_grid, len(indexed_param_grid))
         X_bc = self.sc.broadcast(X)
@@ -582,16 +533,15 @@ class RandomGridSearchCVSparkParallel(RandomizedSearchCV):
         return self
 
 
-def elaspsed_time_format_hr_min_sec(start, end):
-    seconds = end - start
+def elaspsed_time_format_hr_min_sec(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     print("total time(hour:min:sec): ", "%d:%02d:%02d" % (h, m, s))
 
-def GetTime(seconds):
+def elaspsed_time_format_day_hr_min_sec(seconds):
     sec = timedelta(seconds=int(seconds))
     d = datetime(1,1,1) + sec
-    print("\n\ntotal time (format- DAYS:HOURS:MIN:SEC)")
+    print("total time (format- DAYS:HOURS:MIN:SEC)\n")
     print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
 
 
@@ -631,7 +581,7 @@ def cstress_spark_parallel_model_main():
 
     if args.whichsearch == 'grid':
         clf = GridSearchCVSparkParallel(sc=sc, estimator=svc, param_grid=parameters, cv=lkf, n_jobs=-1,
-                                        scoring=None, verbose=1, iid=False)
+                                        scoring=scorer, verbose=1, iid=False)
     else:
         clf = RandomGridSearchCVSparkParallel(sc, estimator=svc, param_distributions=parameters, cv=lkf, n_jobs=-1,
                                               scoring=scorer, n_iter=args.n_iter, verbose=1, iid=False)
@@ -674,4 +624,4 @@ start = time.time()
 print("start.............\n")
 cstress_spark_parallel_model_main()
 end = time.time()
-GetTime(end-start)
+elaspsed_time_format_day_hr_min_sec(end-start)

@@ -480,21 +480,16 @@ def cross_val_probs(estimator, X, y, cv):
     return probs
 
 
-def elaspsed_time_format_hr_min_sec(start, end):
-    seconds = end - start
+def elaspsed_time_format_hr_min_sec(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     print("total time(hour:min:sec): ", "%d:%02d:%02d" % (h, m, s))
 
-def GetTime(seconds):
+def elaspsed_time_format_day_hr_min_sec(seconds):
     sec = timedelta(seconds=int(seconds))
     d = datetime(1,1,1) + sec
     print("total time (format- DAYS:HOURS:MIN:SEC)\n")
     print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
-
-# This tool accepts the data produced by the Java cStress implementation and trains and evaluates an SVM model with
-# cross-subject validation
-# if __name__ == '__main__':
 
 def cstress_model():
     features = readFeatures(args.featureFolder, args.featureFile)
@@ -569,4 +564,4 @@ start = time.time()
 print("start\n")
 cstress_model()
 end = time.time()
-elaspsed_time_format_hr_min_sec(start, end)
+elaspsed_time_format_day_hr_min_sec(end-start)
